@@ -38,6 +38,9 @@ CONNECT_TIMEOUT = 30.0
 # BlueZ needs a beat after connect before CCCD writes, especially on a
 # reconnect that immediately follows Pair() on this one-connection appliance.
 LINK_SETTLE_SECONDS = 0.4
+# The appliance allows one BLE connection; wait for the slot after we drop it
+# so the follow-up connect can encrypt with the stored bond.
+RECONNECT_GAP_SECONDS = 1.0
 PAIR_TIMEOUT = 60.0
 UNLOCK_TIMEOUT = 15.0
 MAX_FRAME_BYTES = 4096

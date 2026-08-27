@@ -24,7 +24,9 @@ from .const import (
     GET_COMMAND,
     LINK_SETTLE_SECONDS,
     MAX_FRAME_BYTES,
+    PAIR_TIMEOUT,
     POLL_TIMEOUT,
+    RECONNECT_GAP_SECONDS,
     SET_WRITE_GAP_SECONDS,
     SUBSCRIBE_TIMEOUT,
     UNLOCK_TIMEOUT,
@@ -405,21 +407,25 @@ class SubZeroBleClient:
         await asyncio.sleep(LINK_SETTLE_SECONDS)
         if self._pin:
             try:
-                newly_paired = await self._ensure_paired()
-                if newly_paired and encrypt_reconnect:
-                    _LOGGER.info(
-                        "Reconnecting so the GATT link uses the BLE bond"
-                    )
-                    await self._disconnect_unlocked()
-                    await self._connect_and_setup(
-                        require_pair=require_pair,
-                        encrypt_reconnect=False,
-                    )
-                    return
+                await self._ensure_paired()
             except SubZeroPairingError as err:
                 if require_pair:
                     raise
                 _LOGGER.warning("BLE pairing did not complete: %s", err)
+            # Pair() on an existing bond does not encrypt this ATT session.
+            # Drop and reconnect so BlueZ applies the stored LTK. D5/D6 CCCD
+            # writes otherwise fail with GATT Insufficient authentication.
+            if encrypt_reconnect:
+                _LOGGER.info(
+                    "Reconnecting so the GATT link uses the BLE bond"
+                )
+                await self._disconnect_unlocked()
+                await asyncio.sleep(RECONNECT_GAP_SECONDS)
+                await self._connect_and_setup(
+                    require_pair=require_pair,
+                    encrypt_reconnect=False,
+                )
+                return
 
         await self._subscribe_and_unlock()
 
@@ -452,7 +458,8 @@ class SubZeroBleClient:
             except Exception as err:
                 _LOGGER.debug("unpair: %s", err)
         await self._disconnect_unlocked()
-        await self._connect_and_setup(require_pair=True, encrypt_reconnect=True)
+        await asyncio.sleep(RECONNECT_GAP_SECONDS)
+        await self._connect_and_setup(require_pair=True, encrypt_reconnect=False)
 
     async def _subscribe_and_unlock(self) -> None:
         """Subscribe to D7 (and D5/D6 after a PIN) and unlock encrypted channels."""
@@ -464,17 +471,24 @@ class SubZeroBleClient:
             await self._subscribe(d7)
 
         if self._pin:
-            if d5 is not None:
-                await self._subscribe_optional(d5)
-            if d6 is not None:
-                await self._subscribe_optional(d6)
-            await self._unlock_channels(d5, d6)
+            await self._subscribe_encrypted_channels(d5, d6)
+            if not self._has_encrypted_subscription(d5, d6):
+                _LOGGER.info(
+                    "D5/D6 need an encrypted ATT link; encrypting the existing bond"
+                )
+                await self._encrypt_existing_bond()
+                d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
+                d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
+                await self._subscribe_encrypted_channels(d5, d6)
             if d6 is not None and str(d6.uuid).lower() in self._subscribed:
                 self._poll_channel = d6
                 _LOGGER.info("Using D6 for full-state polling after unlock")
             elif d7 is not None:
                 self._poll_channel = d7
-                _LOGGER.info("Unlock attempted; falling back to D7 polling")
+                _LOGGER.warning(
+                    "Unlock attempted; falling back to D7 polling. "
+                    "D5/D6 still require encryption — the BlueZ bond may be stale."
+                )
             else:
                 self._poll_channel = _select_poll_channel(self._client)
         else:
@@ -491,6 +505,40 @@ class SubZeroBleClient:
             self._poll_channel.properties,
         )
         await self._subscribe(self._poll_channel)
+
+    def _has_encrypted_subscription(
+        self,
+        d5: BleakGATTCharacteristic | None,
+        d6: BleakGATTCharacteristic | None,
+    ) -> bool:
+        """Return True if D5 or D6 CCCD subscribe succeeded."""
+        for channel in (d5, d6):
+            if channel is not None and str(channel.uuid).lower() in self._subscribed:
+                return True
+        return False
+
+    async def _subscribe_encrypted_channels(
+        self,
+        d5: BleakGATTCharacteristic | None,
+        d6: BleakGATTCharacteristic | None,
+    ) -> None:
+        """Subscribe and unlock D5/D6 when they are visible."""
+        if d5 is not None:
+            await self._subscribe_optional(d5)
+        if d6 is not None:
+            await self._subscribe_optional(d6)
+        await self._unlock_channels(d5, d6)
+
+    async def _encrypt_existing_bond(self) -> None:
+        """Ask BlueZ to encrypt this ATT connection with the stored LTK."""
+        assert self._client is not None
+        try:
+            await asyncio.wait_for(self._client.pair(), timeout=PAIR_TIMEOUT)
+        except Exception as err:
+            message = str(err)
+            if "AlreadyExists" in message or "already" in message.lower():
+                return
+            _LOGGER.debug("pair() to encrypt existing bond: %s", err)
 
     async def _unlock_channels(
         self,
