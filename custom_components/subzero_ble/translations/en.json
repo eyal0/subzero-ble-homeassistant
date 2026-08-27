@@ -1,21 +1,22 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Device is already configured"
+  "config": {
+    "abort": {
+      "already_configured": "Device is already configured",
+      "already_in_progress": "Device configuration is already in progress",
+      "no_devices_found": "No Sub-Zero Group appliances were found. Make sure the appliance is nearby and Bluetooth is enabled on it.",
+      "not_supported": "Device not supported"
+    },
+    "flow_title": "{name}",
+    "step": {
+      "bluetooth_confirm": {
+        "description": "Do you want to set up {name}?"
+      },
+      "user": {
+        "data": {
+          "address": "Device"
         },
-        "error": {
-            "cannot_connect": "Failed to connect",
-            "invalid_auth": "Invalid authentication",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "host": "Host",
-                    "password": "Password",
-                    "username": "Username"
-                }
-            }
-        }
+        "description": "Select a Sub-Zero Group appliance to add. If none appear, make sure the appliance is nearby and Bluetooth is enabled on it."
+      }
     }
+  }
 }
