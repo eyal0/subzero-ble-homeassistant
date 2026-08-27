@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from .coordinator import SubZeroData
 
 _LOGGER = logging.getLogger(__name__)
+_BLE_LOG = logging.getLogger("custom_components.subzero_ble.ble")
 
 OnPushCallback = Callable[["SubZeroData"], None]
 
@@ -79,12 +80,7 @@ class SubZeroBleClient:
         self, characteristic: BleakGATTCharacteristic, data: bytearray
     ) -> None:
         """Reassemble fragmented JSON indications by brace depth."""
-        _LOGGER.debug(
-            "Notify %s +%s bytes: %s",
-            characteristic.uuid,
-            len(data),
-            _printable(data),
-        )
+        _log_ble_pdu("RX", characteristic, data)
         # A new JSON frame starting with `{` while the buffer is still
         # unbalanced means a prior indication was truncated (BLE fragment
         # drop). Discard the partial message rather than splicing.
@@ -110,6 +106,11 @@ class SubZeroBleClient:
             complete = _pop_complete_json(self._buffer)
             if complete is None:
                 return
+            _BLE_LOG.debug(
+                "Reassembled %s-byte JSON: %s",
+                len(complete),
+                _printable(complete),
+            )
             parsed = self._parse_payload(complete)
             future = self._response_future
             if future and not future.done():
@@ -135,15 +136,17 @@ class SubZeroBleClient:
             self._response_future = loop.create_future()
             self._buffer.clear()
 
-            _LOGGER.info(
-                "Polling get_async on %s (%s)",
-                channel.uuid,
-                self._ble_device.address,
+            with_response = "write" in channel.properties
+            _log_ble_pdu(
+                "TX",
+                channel,
+                GET_ASYNC_COMMAND,
+                extra=f"write_with_response={with_response}",
             )
             await self._client.write_gatt_char(
                 channel,
                 GET_ASYNC_COMMAND,
-                response="write" in channel.properties,
+                response=with_response,
             )
 
             try:
@@ -171,6 +174,7 @@ class SubZeroBleClient:
                 return
             for uuid in subscribed:
                 try:
+                    _BLE_LOG.debug("CCCD unsubscribe %s", uuid)
                     await client.stop_notify(uuid)
                 except BleakError:
                     _LOGGER.debug(
@@ -202,6 +206,12 @@ class SubZeroBleClient:
             timeout=CONNECT_TIMEOUT,
         )
         _log_gatt_table(self._client)
+        _BLE_LOG.debug(
+            "Connected to %s mtu=%s rssi=%s",
+            self._ble_device.address,
+            getattr(self._client, "mtu_size", None),
+            getattr(self._ble_device, "rssi", None),
+        )
         self._poll_channel = _select_poll_channel(self._client)
         _LOGGER.info(
             "Using poll characteristic %s (properties=%s)",
@@ -223,6 +233,12 @@ class SubZeroBleClient:
         if uuid in self._subscribed:
             return
         assert self._client is not None
+        _BLE_LOG.debug(
+            "CCCD subscribe %s handle=%s props=%s",
+            _channel_name(characteristic),
+            getattr(characteristic, "handle", None),
+            characteristic.properties,
+        )
         await asyncio.wait_for(
             self._client.start_notify(characteristic, self._notification_handler),
             timeout=SUBSCRIBE_TIMEOUT,
@@ -447,12 +463,69 @@ def _printable(data: bytes | bytearray) -> str:
     return "".join(chr(byte) if 32 <= byte <= 126 else "?" for byte in data)
 
 
+def _hex(data: bytes | bytearray) -> str:
+    """Return space-separated hex suitable for comparison with ESPHome logs."""
+    return bytes(data).hex(" ")
+
+
+def _channel_name(characteristic: BleakGATTCharacteristic | str) -> str:
+    """Return D4–D8 when the UUID matches a Sub-Zero characteristic."""
+    uuid = (
+        str(characteristic.uuid)
+        if isinstance(characteristic, BleakGATTCharacteristic)
+        else str(characteristic)
+    ).lower()
+    suffix = uuid.replace("-", "")[-2:]
+    if suffix in {"d4", "d5", "d6", "d7", "d8"}:
+        return suffix.upper()
+    return uuid
+
+
+def _log_ble_pdu(
+    direction: str,
+    characteristic: BleakGATTCharacteristic,
+    data: bytes | bytearray,
+    extra: str = "",
+) -> None:
+    """Log a BLE write or notification at protocol-trace level."""
+    suffix = f" {extra}" if extra else ""
+    _BLE_LOG.debug(
+        "%s %s handle=%s %s bytes ascii=%s hex=%s%s",
+        direction,
+        _channel_name(characteristic),
+        getattr(characteristic, "handle", None),
+        len(data),
+        _printable(data),
+        _hex(data),
+        suffix,
+    )
+
+
 def _log_gatt_table(client: BleakClientWithServiceCache) -> None:
     """Log the appliance GATT database to help diagnose pairing/channel issues."""
     for service in client.services:
         _LOGGER.info("GATT service %s", service.uuid)
+        _BLE_LOG.debug("GATT service %s", service.uuid)
         for char in service.characteristics:
-            _LOGGER.info("  characteristic %s props=%s", char.uuid, char.properties)
+            _LOGGER.info(
+                "  characteristic %s handle=%s props=%s",
+                char.uuid,
+                getattr(char, "handle", None),
+                char.properties,
+            )
+            _BLE_LOG.debug(
+                "  %s uuid=%s handle=%s props=%s",
+                _channel_name(char),
+                char.uuid,
+                getattr(char, "handle", None),
+                char.properties,
+            )
+            for descriptor in char.descriptors:
+                _BLE_LOG.debug(
+                    "    descriptor %s handle=%s",
+                    descriptor.uuid,
+                    getattr(descriptor, "handle", None),
+                )
 
 
 def _characteristic_by_uuid(
