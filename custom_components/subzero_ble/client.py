@@ -85,6 +85,21 @@ class SubZeroBleClient:
             len(data),
             _printable(data),
         )
+        # A new JSON frame starting with `{` while the buffer is still
+        # unbalanced means a prior indication was truncated (BLE fragment
+        # drop). Discard the partial message rather than splicing.
+        if data and data[0:1] == b"{" and self._buffer:
+            try:
+                pending = self._buffer.decode("utf-8")
+            except UnicodeDecodeError:
+                pending = ""
+            if _json_brace_depth(pending) != 0:
+                _LOGGER.debug(
+                    "Discarding %s bytes of truncated JSON before new frame",
+                    len(self._buffer),
+                )
+                self._buffer.clear()
+
         self._buffer.extend(data)
         if len(self._buffer) > MAX_FRAME_BYTES:
             _LOGGER.warning("Sub-Zero BLE reassembly buffer overflow; resetting")
@@ -220,10 +235,9 @@ class SubZeroBleClient:
         from .coordinator import SubZeroData
 
         printable = _printable(raw_data)
-        try:
-            payload: dict[str, Any] = json.loads(raw_data.decode("utf-8").strip())
-        except (json.JSONDecodeError, UnicodeDecodeError) as err:
-            _LOGGER.error("Failed to decode Sub-Zero payload %s: %s", printable, err)
+        payload = _loads_json(raw_data)
+        if payload is None:
+            _LOGGER.error("Failed to decode Sub-Zero payload %s", printable)
             return SubZeroData()
 
         _LOGGER.debug("Received Sub-Zero JSON: %s", payload)
@@ -330,23 +344,102 @@ def _pop_complete_json(buffer: bytearray) -> bytes | None:
         buffer.clear()
         return None
     if start:
-        del buffer[: start]
+        del buffer[:start]
         text = text[start:]
 
+    complete = _slice_complete_json(text)
+    if complete is None:
+        return None
+    remainder = text[len(complete) :]
+    buffer.clear()
+    if remainder:
+        buffer.extend(remainder.encode("utf-8"))
+    return complete.encode("utf-8")
+
+
+def _slice_complete_json(text: str) -> str | None:
+    """Return the leading complete JSON object, ignoring braces inside strings."""
     depth = 0
+    in_string = False
+    escape = False
     for index, char in enumerate(text):
-        if char == "{":
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
             depth += 1
         elif char == "}":
             depth -= 1
             if depth == 0:
-                complete = text[: index + 1]
-                remainder = text[index + 1 :]
-                buffer.clear()
-                if remainder:
-                    buffer.extend(remainder.encode("utf-8"))
-                return complete.encode("utf-8")
+                return text[: index + 1]
     return None
+
+
+def _json_brace_depth(text: str) -> int:
+    """Return net JSON object depth, ignoring braces inside strings."""
+    depth = 0
+    in_string = False
+    escape = False
+    for char in text:
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+    return depth
+
+
+def _loads_json(raw_data: bytes) -> dict[str, Any] | None:
+    """Parse JSON, recovering a valid object if two frames were spliced."""
+    try:
+        text = raw_data.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = _recover_json_object(text)
+        if payload is not None:
+            _LOGGER.debug("Recovered JSON object from spliced BLE payload")
+    if isinstance(payload, dict):
+        return payload
+    return None
+
+
+def _recover_json_object(text: str) -> dict[str, Any] | None:
+    """Find a parseable JSON object in a spliced BLE buffer."""
+    start = 0
+    while True:
+        idx = text.find("{", start)
+        if idx == -1:
+            return None
+        extracted = _slice_complete_json(text[idx:])
+        if extracted:
+            try:
+                payload = json.loads(extracted)
+            except json.JSONDecodeError:
+                payload = None
+            if isinstance(payload, dict) and (
+                payload.get("status") == 0 or "resp" in payload or "props" in payload
+            ):
+                return payload
+        start = idx + 1
 
 
 def _printable(data: bytes | bytearray) -> str:
