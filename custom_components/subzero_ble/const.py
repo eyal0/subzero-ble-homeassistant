@@ -36,6 +36,43 @@ PAIR_TIMEOUT = 60.0
 UNLOCK_TIMEOUT = 15.0
 MAX_FRAME_BYTES = 4096
 UPDATE_INTERVAL_SECONDS = 10
+# ESPHome found back-to-back D5 sets can drop; space grouped ice-mode writes.
+SET_WRITE_GAP_SECONDS = 0.75
+
+ICE_MAKER_OFF = "Off"
+ICE_MAKER_NORMAL = "Normal"
+ICE_MAKER_NIGHT_ICE = "Night Ice"
+ICE_MAKER_MAX_ICE = "Max Ice"
+ICE_MAKER_OPTIONS = (
+    ICE_MAKER_OFF,
+    ICE_MAKER_NORMAL,
+    ICE_MAKER_NIGHT_ICE,
+    ICE_MAKER_MAX_ICE,
+)
+
+# BLE has no ice-mode verb; the four UI states are these three booleans.
+ICE_MAKER_MODE_PARAMS: dict[str, dict[str, bool]] = {
+    ICE_MAKER_OFF: {
+        "ice_maker_on": False,
+        "max_ice_on": False,
+        "night_ice_on": False,
+    },
+    ICE_MAKER_NORMAL: {
+        "ice_maker_on": True,
+        "max_ice_on": False,
+        "night_ice_on": False,
+    },
+    ICE_MAKER_NIGHT_ICE: {
+        "ice_maker_on": True,
+        "max_ice_on": False,
+        "night_ice_on": True,
+    },
+    ICE_MAKER_MAX_ICE: {
+        "ice_maker_on": True,
+        "max_ice_on": True,
+        "night_ice_on": False,
+    },
+}
 
 
 def normalize_pin(pin: str | None) -> str | None:

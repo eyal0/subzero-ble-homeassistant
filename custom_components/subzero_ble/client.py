@@ -20,6 +20,7 @@ from .const import (
     GET_COMMAND,
     MAX_FRAME_BYTES,
     POLL_TIMEOUT,
+    SET_WRITE_GAP_SECONDS,
     SUBSCRIBE_TIMEOUT,
     UNLOCK_TIMEOUT,
     display_pin_command,
@@ -246,11 +247,29 @@ class SubZeroBleClient:
         if not self._pin:
             raise BleakError(
                 "Enter the 6-digit PIN under Configure first. "
-                "Setpoint writes use encrypted channel D5."
+                "Writes use encrypted channel D5."
             )
         async with self._lock:
             await self._ensure_connected(require_pair=True)
             await self._write_set(key, value)
+
+    async def async_set_properties(self, params: dict[str, object]) -> None:
+        """Write several properties on D5, spaced so the appliance keeps each set."""
+        if not self._pin:
+            raise BleakError(
+                "Enter the 6-digit PIN under Configure first. "
+                "Writes use encrypted channel D5."
+            )
+        if not params:
+            return
+        async with self._lock:
+            await self._ensure_connected(require_pair=True)
+            first = True
+            for key, value in params.items():
+                if not first:
+                    await asyncio.sleep(SET_WRITE_GAP_SECONDS)
+                first = False
+                await self._write_set(key, value)
 
     async def _write_set(self, key: str, value: object) -> None:
         """Send `set` on D5 and wait for an ack."""

@@ -16,7 +16,16 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import SubZeroBleClient, SubZeroInvalidPin
-from .const import CONF_PIN, DOMAIN, UPDATE_INTERVAL_SECONDS
+from .const import (
+    CONF_PIN,
+    DOMAIN,
+    ICE_MAKER_MAX_ICE,
+    ICE_MAKER_MODE_PARAMS,
+    ICE_MAKER_NIGHT_ICE,
+    ICE_MAKER_NORMAL,
+    ICE_MAKER_OFF,
+    UPDATE_INTERVAL_SECONDS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +85,19 @@ def field_bool(data: SubZeroData, key: str) -> bool | None:
     if key not in data.fields:
         return None
     return bool(data.fields[key])
+
+
+def ice_maker_mode(data: SubZeroData) -> str | None:
+    """Map ice_maker_on / max_ice_on / night_ice_on to a select option."""
+    if "ice_maker_on" not in data.fields:
+        return None
+    if not data.fields["ice_maker_on"]:
+        return ICE_MAKER_OFF
+    if data.fields.get("max_ice_on"):
+        return ICE_MAKER_MAX_ICE
+    if data.fields.get("night_ice_on"):
+        return ICE_MAKER_NIGHT_ICE
+    return ICE_MAKER_NORMAL
 
 
 def field_text(data: SubZeroData, key: str) -> str | None:
@@ -214,6 +236,20 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         else:
             update = SubZeroData(fields={property_key: wire})
         self._apply_push(update)
+
+    async def async_set_ice_maker_mode(self, option: str) -> None:
+        """Write ice_maker_on / max_ice_on / night_ice_on for a UI mode."""
+        params = ICE_MAKER_MODE_PARAMS.get(option)
+        if params is None:
+            raise HomeAssistantError(f"Unknown ice maker mode: {option}")
+        client = await self._async_ready_client(require_pin=True)
+        try:
+            await client.async_set_properties(params)
+        except Exception as err:
+            raise HomeAssistantError(str(err)) from err
+        self._apply_push(
+            SubZeroData(ice_maker_on=params["ice_maker_on"], fields=dict(params))
+        )
 
     def _apply_push(self, data: SubZeroData) -> None:
         """Merge an unsolicited notification into coordinator state."""
