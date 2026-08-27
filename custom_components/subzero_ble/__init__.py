@@ -27,4 +27,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SubZeroConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, entry: SubZeroConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    await entry.runtime_data.async_disconnect()
+    return unload_ok

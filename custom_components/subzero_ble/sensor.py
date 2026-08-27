@@ -97,4 +97,6 @@ class SubZeroSensorEntity(CoordinatorEntity[SubZeroDataUpdateCoordinator], Senso
     @property
     def native_value(self) -> float | int | None:
         """Return sensor value."""
+        if self.coordinator.data is None:
+            return None
         return self.entity_description.value_fn(self.coordinator.data)

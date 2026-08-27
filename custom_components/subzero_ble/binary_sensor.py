@@ -22,7 +22,7 @@ from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator
 @dataclass(frozen=True, kw_only=True)
 class SubZeroBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describes Sub-Zero binary sensor entity."""
-    is_on_fn: Callable[[SubZeroData], bool]
+    is_on_fn: Callable[[SubZeroData], bool | None]
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[SubZeroBinarySensorEntityDescription, ...] = (
@@ -77,6 +77,8 @@ class SubZeroBinarySensorEntity(
         )
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return True if door is open."""
+        if self.coordinator.data is None:
+            return None
         return self.entity_description.is_on_fn(self.coordinator.data)
