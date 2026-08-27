@@ -17,6 +17,7 @@ from .const import (
     GET_ASYNC_COMMAND,
     MAX_FRAME_BYTES,
     POLL_TIMEOUT,
+    SUBSCRIBE_TIMEOUT,
 )
 
 if TYPE_CHECKING:
@@ -118,8 +119,8 @@ class SubZeroBleClient:
             self._response_future = loop.create_future()
             self._buffer.clear()
 
-            _LOGGER.debug(
-                "Writing get_async to %s on %s",
+            _LOGGER.info(
+                "Polling get_async on %s (%s)",
                 channel.uuid,
                 self._ble_device.address,
             )
@@ -189,15 +190,13 @@ class SubZeroBleClient:
             self._poll_channel.properties,
         )
         await self._subscribe(self._poll_channel)
-        if d6 := _characteristic_by_uuid(self._client, CHAR_D6_UUID):
-            if str(d6.uuid).lower() != str(self._poll_channel.uuid).lower():
-                try:
-                    await self._subscribe(d6)
-                    _LOGGER.info("Also subscribed to D6 for push notifications")
-                except BleakError as err:
-                    _LOGGER.info(
-                        "Could not subscribe to D6 (pairing may be required): %s", err
-                    )
+        # D5/D6 are often visible before bonding on this firmware, but CCCD
+        # subscribe/writes require encryption and can hang BlueZ indefinitely.
+        if _characteristic_by_uuid(self._client, CHAR_D6_UUID):
+            _LOGGER.info(
+                "D6 is visible but requires BLE pairing for live door/temp "
+                "pushes; polling D7 until pairing is implemented"
+            )
 
     async def _subscribe(self, characteristic: BleakGATTCharacteristic) -> None:
         """Subscribe to indications/notifications on a characteristic."""
@@ -205,7 +204,10 @@ class SubZeroBleClient:
         if uuid in self._subscribed:
             return
         assert self._client is not None
-        await self._client.start_notify(characteristic, self._notification_handler)
+        await asyncio.wait_for(
+            self._client.start_notify(characteristic, self._notification_handler),
+            timeout=SUBSCRIBE_TIMEOUT,
+        )
         self._subscribed.add(uuid)
         _LOGGER.debug("Subscribed to %s", characteristic.uuid)
 
