@@ -10,13 +10,7 @@
   "issue_tracker": "https://github.com/eyal0/subzero-ble-homeassistant/issues",
   "integration_type": "device",
   "iot_class": "local_push",
-  "loggers": [
-    "custom_components.subzero_ble",
-    "bleak",
-    "bleak_retry_connector",
-    "habluetooth",
-    "homeassistant.components.bluetooth"
-  ],
+  "loggers": ["custom_components.subzero_ble"],
   "quality_scale": "bronze",
   "requirements": [],
   "bluetooth": [
