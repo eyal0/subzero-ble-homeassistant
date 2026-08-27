@@ -100,7 +100,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SubZeroBinarySensorEntityDescription, ...] = (
     ),
     SubZeroBinarySensorEntityDescription(
         key="has_notifications",
-        name="Notifications",
+        name="Has Notifications",
         icon="mdi:bell-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         is_on_fn=lambda data: field_nonempty(data, "notifs"),

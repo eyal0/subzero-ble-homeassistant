@@ -128,7 +128,7 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 | Service Mode | Diagnostic |
 | Service Required | Problem-class diagnostic |
 | Active Faults | Problem-class diagnostic; on when `active_faults` is non-empty |
-| Notifications | Diagnostic; on when the `notifs` event log is non-empty |
+| Has Notifications | Diagnostic; on when the `notifs` event log is non-empty |
 | Pairing Window | Diagnostic; on when the appliance BLE pairing window is open |
 
 ## Supported devices
