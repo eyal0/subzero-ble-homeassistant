@@ -6,7 +6,7 @@ import json
 import re
 
 DOMAIN = "subzero_ble"
-VERSION = "0.9.0"
+VERSION = "0.20.0"
 
 CONF_PIN = "pin"
 
