@@ -1,19 +1,22 @@
 """Coordinator for Sub-Zero BLE."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
+import json
 import logging
+from typing import Any
 
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import SubZeroBleClient, SubZeroInvalidPin
-from .const import CONF_PIN, UPDATE_INTERVAL_SECONDS
+from .const import CONF_PIN, DOMAIN, UPDATE_INTERVAL_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,9 +32,12 @@ class SubZeroData:
     ice_maker_on: bool | None = None
     water_filter_life: int | None = None
     air_filter_life: int | None = None
+    fields: dict[str, Any] = field(default_factory=dict)
 
     def has_values(self) -> bool:
         """Return True if any field was present in the payload."""
+        if self.fields:
+            return True
         return any(
             value is not None
             for value in (
@@ -47,6 +53,8 @@ class SubZeroData:
 
     def merge(self, update: SubZeroData) -> SubZeroData:
         """Overlay non-None fields from a poll or push onto current state."""
+        fields = dict(self.fields)
+        fields.update(update.fields)
         return SubZeroData(
             fridge_temp=_keep(update.fridge_temp, self.fridge_temp),
             freezer_temp=_keep(update.freezer_temp, self.freezer_temp),
@@ -55,11 +63,89 @@ class SubZeroData:
             ice_maker_on=_keep(update.ice_maker_on, self.ice_maker_on),
             water_filter_life=_keep(update.water_filter_life, self.water_filter_life),
             air_filter_life=_keep(update.air_filter_life, self.air_filter_life),
+            fields=fields,
         )
 
 
 def _keep(new: object, old: object) -> object:
     return new if new is not None else old
+
+
+def field_bool(data: SubZeroData, key: str) -> bool | None:
+    """Return a boolean appliance field, or None if it was not in the payload."""
+    if key not in data.fields:
+        return None
+    return bool(data.fields[key])
+
+
+def field_text(data: SubZeroData, key: str) -> str | None:
+    """Return an appliance field as a diagnostic string."""
+    if key not in data.fields:
+        return None
+    value = data.fields[key]
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, separators=(",", ":"))
+    return str(value)
+
+
+def field_number(data: SubZeroData, key: str) -> float | int | None:
+    """Return a numeric appliance field."""
+    if key not in data.fields:
+        return None
+    value = data.fields[key]
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def format_version(data: SubZeroData) -> str | None:
+    """Return firmware/API version as a short diagnostic string."""
+    if "version" not in data.fields:
+        return None
+    value = data.fields["version"]
+    if isinstance(value, dict):
+        parts: list[str] = []
+        if fw := value.get("fw"):
+            parts.append(f"fw {fw}")
+        if api := value.get("api"):
+            parts.append(f"api {api}")
+        if appliance := value.get("appliance"):
+            parts.append(str(appliance))
+        if parts:
+            return " / ".join(parts)
+        return json.dumps(value, separators=(",", ":"))
+    if value is None:
+        return None
+    return str(value)
+
+
+def parse_uptime_seconds(data: SubZeroData) -> int | None:
+    """Parse appliance uptime (`HH:MM:SS` or seconds) into seconds."""
+    if "uptime" not in data.fields:
+        return None
+    value = data.fields["uptime"]
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        parts = value.split(":")
+        if len(parts) == 3:
+            try:
+                hours, minutes, seconds = (int(part) for part in parts)
+            except ValueError:
+                return None
+            return hours * 3600 + minutes * 60 + seconds
+    return None
 
 
 class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
@@ -119,7 +205,25 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             merged.fridge_door_open,
             merged.freezer_door_open,
         )
+        self._sync_device_info(merged)
         self.async_set_updated_data(merged)
+
+    def _sync_device_info(self, data: SubZeroData) -> None:
+        """Copy model/serial/firmware from the appliance into the device registry."""
+        registry = dr.async_get(self.hass)
+        device = registry.async_get_device(identifiers={(DOMAIN, self.address)})
+        if device is None:
+            return
+        updates: dict[str, str] = {}
+        if model := data.fields.get("appliance_model"):
+            updates["model"] = str(model)
+        if serial := data.fields.get("appliance_serial"):
+            updates["serial_number"] = str(serial)
+        version = format_version(data)
+        if version:
+            updates["sw_version"] = version
+        if updates:
+            registry.async_update_device(device.id, **updates)
 
     def _handle_push(self, data: SubZeroData) -> None:
         """Receive a push from the BLE thread/loop and apply it on the HA loop."""
@@ -165,6 +269,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
 
         current = self.data or SubZeroData()
         merged = current.merge(parsed)
+        self._sync_device_info(merged)
         _LOGGER.info(
             "Sub-Zero poll complete for %s: fridge_door=%s freezer_door=%s",
             self.address,

@@ -10,7 +10,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfTemperature,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -18,13 +23,21 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
 from .const import DOMAIN
-from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator
+from .coordinator import (
+    SubZeroData,
+    SubZeroDataUpdateCoordinator,
+    field_number,
+    field_text,
+    format_version,
+    parse_uptime_seconds,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
 class SubZeroSensorEntityDescription(SensorEntityDescription):
     """Describes Sub-Zero sensor entity."""
-    value_fn: Callable[[SubZeroData], float | int | None]
+
+    value_fn: Callable[[SubZeroData], float | int | str | None]
 
 
 # BLE ref_set_temp / frz_set_temp are Celsius setpoints. The appliance display
@@ -63,6 +76,91 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: data.air_filter_life,
     ),
+    SubZeroSensorEntityDescription(
+        key="appliance_model",
+        name="Appliance Model",
+        icon="mdi:fridge-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "appliance_model"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="appliance_name",
+        name="Appliance Name",
+        icon="mdi:tag-text-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "appliance_name"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="appliance_serial",
+        name="Appliance Serial",
+        icon="mdi:barcode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "appliance_serial"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="appliance_type",
+        name="Appliance Type",
+        icon="mdi:information-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "appliance_type"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="build_info",
+        name="Build Info",
+        icon="mdi:code-braces",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "build_info"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="door_ajar_timeout",
+        name="Door Ajar Alarm Timeout",
+        icon="mdi:timer-alert-outline",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_number(data, "door_ajar_timeout"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="max_ice_start_time",
+        name="Max Ice Start Time",
+        icon="mdi:clock-start",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "max_ice_start_time"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="max_ice_end_time",
+        name="Max Ice End Time",
+        icon="mdi:clock-end",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "max_ice_end_time"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="service",
+        name="Service",
+        icon="mdi:account-wrench-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "service"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="uptime",
+        name="Uptime",
+        icon="mdi:timer-outline",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=parse_uptime_seconds,
+    ),
+    SubZeroSensorEntityDescription(
+        key="version",
+        name="Firmware Version",
+        icon="mdi:chip",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=format_version,
+    ),
 )
 
 
@@ -100,7 +198,7 @@ class SubZeroSensorEntity(CoordinatorEntity[SubZeroDataUpdateCoordinator], Senso
         )
 
     @property
-    def native_value(self) -> float | int | None:
+    def native_value(self) -> float | int | str | None:
         """Return sensor value."""
         if self.coordinator.data is None:
             return None

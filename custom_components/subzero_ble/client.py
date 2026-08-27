@@ -536,6 +536,7 @@ class SubZeroBleClient:
             air_filter_life=_optional_int(
                 fields, "air_filter_pct_remaining", "airFilterLife"
             ),
+            fields=dict(fields),
         )
         _LOGGER.info(
             "Sub-Zero parsed %s: fridge_door=%s freezer_door=%s "
