@@ -27,6 +27,9 @@ class SubZeroSensorEntityDescription(SensorEntityDescription):
     value_fn: Callable[[SubZeroData], float | int | None]
 
 
+# BLE ref_set_temp / frz_set_temp are Celsius setpoints. The appliance display
+# C/F toggle is local-only and does not change these numbers. Home Assistant
+# converts to Fahrenheit in the UI when the profile unit system is imperial.
 SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
     SubZeroSensorEntityDescription(
         key="fridge_temperature",
@@ -34,6 +37,7 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         value_fn=lambda data: data.fridge_temp,
     ),
     SubZeroSensorEntityDescription(
@@ -42,6 +46,7 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         value_fn=lambda data: data.freezer_temp,
     ),
     SubZeroSensorEntityDescription(
