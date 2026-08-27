@@ -42,7 +42,13 @@ After that, add the integration:
 
 HACS uses the GitHub release tag as the installed version. Prefer a tagged release over `main` unless you are testing unreleased changes.
 
-The integration version is stored only in `custom_components/subzero_ble/manifest.json` (`const.VERSION` reads it). Bump with `python3 scripts/bump_version.py patch` (or `minor` / `major` / `0.21.0`), commit, and push tag `vX.Y.Z`. Pushing that tag creates the GitHub release. **Actions → Release** does the bump, tag, and release in one step.
+The integration version is stored only in `custom_components/subzero_ble/manifest.json` (`const.VERSION` reads it). Create a GitHub release with:
+
+```bash
+./scripts/release.sh patch    # or minor / major / 0.22.0
+```
+
+That bumps the manifest, commits, tags `vX.Y.Z`, and pushes to `eyal0`. The tag push creates the GitHub release. Add `--dry-run` to print the git commands without changing anything. **Actions → Release** does the same from the GitHub UI.
 
 ### Manual
 
