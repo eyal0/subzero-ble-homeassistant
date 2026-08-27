@@ -42,6 +42,8 @@ After that, add the integration:
 
 HACS uses the GitHub release tag as the installed version. Prefer a tagged release over `main` unless you are testing unreleased changes.
 
+The integration version is stored only in `custom_components/subzero_ble/manifest.json` (`const.VERSION` reads it). Bump with `python3 scripts/bump_version.py patch` (or `minor` / `major` / `0.21.0`), commit, tag `vX.Y.Z`, and publish a GitHub release — or run **Actions → Release**.
+
 ### Manual
 
 Copy `custom_components/subzero_ble` into `<config>/custom_components/subzero_ble` and restart Home Assistant.

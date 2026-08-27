@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import re
 
 DOMAIN = "subzero_ble"
-VERSION = "0.20.0"
+VERSION = json.loads(
+    (Path(__file__).resolve().parent / "manifest.json").read_text(encoding="utf-8")
+)["version"]
 
 CONF_PIN = "pin"
 
