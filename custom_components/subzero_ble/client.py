@@ -166,24 +166,38 @@ class SubZeroBleClient:
     async def poll_state(self) -> SubZeroData:
         """Request status from the appliance, keeping the BLE connection open."""
         async with self._lock:
-            await self._ensure_connected()
-            assert self._poll_channel is not None
-            channel = self._poll_channel
-            command = GET_COMMAND if self._use_get_verb else GET_ASYNC_COMMAND
-            raw = await self._write_and_wait(channel, command, timeout=POLL_TIMEOUT)
-            payload = _loads_json(raw)
-            if (
-                payload is not None
-                and payload.get("status") == 1
-                and payload.get("resp") == {}
-                and not self._use_get_verb
-            ):
-                _LOGGER.info("get_async returned empty state; retrying with get")
-                self._use_get_verb = True
-                raw = await self._write_and_wait(
-                    channel, GET_COMMAND, timeout=POLL_TIMEOUT
+            try:
+                return await self._poll_once()
+            except BleakError as err:
+                if not _is_link_drop(err):
+                    raise
+                _LOGGER.warning(
+                    "BLE link dropped during poll; reconnecting and retrying: %s",
+                    err,
                 )
-            return self._parse_payload(raw)
+                await self._disconnect_unlocked()
+                return await self._poll_once()
+
+    async def _poll_once(self) -> SubZeroData:
+        """One get_async/get cycle. Caller must hold the client lock."""
+        await self._ensure_connected()
+        assert self._poll_channel is not None
+        channel = self._poll_channel
+        command = GET_COMMAND if self._use_get_verb else GET_ASYNC_COMMAND
+        raw = await self._write_and_wait(channel, command, timeout=POLL_TIMEOUT)
+        payload = _loads_json(raw)
+        if (
+            payload is not None
+            and payload.get("status") == 1
+            and payload.get("resp") == {}
+            and not self._use_get_verb
+        ):
+            _LOGGER.info("get_async returned empty state; retrying with get")
+            self._use_get_verb = True
+            raw = await self._write_and_wait(
+                channel, GET_COMMAND, timeout=POLL_TIMEOUT
+            )
+        return self._parse_payload(raw)
 
     async def async_display_pin(self, duration: int = 30) -> None:
         """Pair if needed, then ask the appliance to show its PIN on the display."""
@@ -577,6 +591,20 @@ def _is_insufficient_auth(err: BaseException) -> bool:
             "error=8",
             "authentication is required",
             "not paired",
+        )
+    )
+
+
+def _is_link_drop(err: BaseException) -> bool:
+    """Return True if the appliance or adapter dropped the GATT connection."""
+    text = str(err).lower()
+    return any(
+        marker in text
+        for marker in (
+            "disconnected during poll",
+            "disconnected",
+            "not connected",
+            "connection lost",
         )
     )
 
