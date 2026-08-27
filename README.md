@@ -42,7 +42,7 @@ After that, add the integration:
 
 HACS uses the GitHub release tag as the installed version. Prefer a tagged release over `main` unless you are testing unreleased changes.
 
-The integration version is stored only in `custom_components/subzero_ble/manifest.json` (`const.VERSION` reads it). Bump with `python3 scripts/bump_version.py patch` (or `minor` / `major` / `0.21.0`), commit, tag `vX.Y.Z`, and publish a GitHub release — or run **Actions → Release**.
+The integration version is stored only in `custom_components/subzero_ble/manifest.json` (`const.VERSION` reads it). Bump with `python3 scripts/bump_version.py patch` (or `minor` / `major` / `0.21.0`), commit, and push tag `vX.Y.Z`. Pushing that tag creates the GitHub release. **Actions → Release** does the bump, tag, and release in one step.
 
 ### Manual
 
@@ -192,7 +192,7 @@ To make an icon: export a 256×256 PNG (and 512×512 `@2x`) from Figma, Inkscape
 
 Anyone can install this today as a custom repository. Listing it in the default HACS store is a separate PR to [hacs/default](https://github.com/hacs/default) (`integration` file, alphabetical).
 
-hassfest and the HACS Action run on every push, pull request, nightly, and via **Actions → Validate → Run workflow**. Both must pass **without ignored checks**. After a green run, publish a GitHub **release** (not only a tag), then open the `hacs/default` PR.
+hassfest and the HACS Action run on every push, pull request, nightly, and via **Actions → Validate → Run workflow**. Both must pass **without ignored checks**. After a green run, push a `vX.Y.Z` tag (or use **Actions → Release**) so a GitHub **release** is created, then open the `hacs/default` PR.
 
 Also required on the GitHub repo itself: a **description**, **topics**, issues enabled, and an OSI-approved **license** GitHub can detect (the tracked `LICENSE` file is currently empty). Brand assets are already at `custom_components/subzero_ble/brand/icon.png`.
 
