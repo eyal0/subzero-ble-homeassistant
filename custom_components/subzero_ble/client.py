@@ -59,7 +59,7 @@ class SubZeroInvalidPin(BleakError):
 
 
 class SubZeroBleClient:
-    """Handles GATT connections, frame reassembly, and JSON parsing."""
+    """Handles GATT connections, newline-delimited JSON reassembly, and parsing."""
 
     def __init__(
         self,
@@ -132,24 +132,19 @@ class SubZeroBleClient:
     def _notification_handler(
         self, characteristic: BleakGATTCharacteristic, data: bytearray
     ) -> None:
-        """Reassemble fragmented JSON indications by brace depth."""
+        """Reassemble fragmented JSON indications until a trailing newline."""
         _log_ble_pdu("RX", characteristic, data)
         uuid = str(characteristic.uuid).lower()
         buffer = self._buffers.setdefault(uuid, bytearray())
-        # A new JSON frame starting with `{` while the buffer is still
-        # unbalanced means a prior indication was truncated (BLE fragment
-        # drop). Discard the partial message rather than splicing.
-        if data and data[0:1] == b"{" and buffer:
-            try:
-                pending = buffer.decode("utf-8")
-            except UnicodeDecodeError:
-                pending = ""
-            if _json_brace_depth(pending) != 0:
-                _LOGGER.debug(
-                    "Discarding %s bytes of truncated JSON before new frame",
-                    len(buffer),
-                )
-                buffer.clear()
+        # A new JSON frame starting with `{` while we are still waiting for
+        # the previous linefeed means a prior indication was truncated.
+        # Discard the partial message rather than splicing.
+        if data.startswith(b"{") and buffer and b"\n" not in buffer:
+            _LOGGER.debug(
+                "Discarding %s bytes of truncated JSON before new frame",
+                len(buffer),
+            )
+            buffer.clear()
 
         buffer.extend(data)
         if len(buffer) > MAX_FRAME_BYTES:
@@ -725,28 +720,21 @@ def _extract_fields(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _pop_complete_json(buffer: bytearray) -> bytes | None:
-    """Return the first complete JSON object from buffer, if present."""
-    try:
-        text = buffer.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
+    """Return the first newline-delimited JSON object from buffer, if present.
 
-    start = text.find("{")
-    if start == -1:
-        buffer.clear()
-        return None
-    if start:
-        del buffer[:start]
-        text = text[start:]
-
-    complete = _slice_complete_json(text)
-    if complete is None:
-        return None
-    remainder = text[len(complete) :]
-    buffer.clear()
-    if remainder:
-        buffer.extend(remainder.encode("utf-8"))
-    return complete.encode("utf-8")
+    Appliance frames are compact JSON plus a trailing linefeed (0x0a). BLE
+    may split a frame across indications; wait for that byte before parsing.
+    """
+    while True:
+        newline = buffer.find(b"\n")
+        if newline == -1:
+            return None
+        frame = bytes(buffer[:newline])
+        del buffer[: newline + 1]
+        start = frame.find(b"{")
+        if start == -1:
+            continue
+        return frame[start:]
 
 
 def _slice_complete_json(text: str) -> str | None:
@@ -772,29 +760,6 @@ def _slice_complete_json(text: str) -> str | None:
             if depth == 0:
                 return text[: index + 1]
     return None
-
-
-def _json_brace_depth(text: str) -> int:
-    """Return net JSON object depth, ignoring braces inside strings."""
-    depth = 0
-    in_string = False
-    escape = False
-    for char in text:
-        if in_string:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-    return depth
 
 
 def _loads_json(raw_data: bytes) -> dict[str, Any] | None:
