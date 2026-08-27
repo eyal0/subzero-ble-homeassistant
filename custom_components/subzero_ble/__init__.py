@@ -15,6 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
 ]
 
 type SubZeroConfigEntry = ConfigEntry[SubZeroDataUpdateCoordinator]
@@ -33,7 +34,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SubZeroConfigEntry) -> b
 
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+async def _async_update_listener(
+    hass: HomeAssistant, entry: SubZeroConfigEntry
+) -> None:
+    """Reload when the pairing PIN is changed."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SubZeroConfigEntry) -> bool:

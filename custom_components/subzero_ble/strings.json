@@ -10,13 +10,37 @@
       },
       "bluetooth_confirm": {
         "description": "Do you want to set up {name}?"
+      },
+      "pin": {
+        "title": "Appliance PIN",
+        "description": "Enter the 6-digit PIN shown on {name}. Watch the appliance display, or copy the PIN from the official Sub-Zero Group Owner app. Leave blank to use diagnostic-only mode (door status without pairing).",
+        "data": {
+          "pin": "PIN"
+        }
       }
+    },
+    "error": {
+      "invalid_pin": "PIN must be exactly 6 digits"
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
       "already_in_progress": "[%key:common::config_flow::abort::already_in_progress%]",
       "no_devices_found": "No Sub-Zero Group appliances were found. Make sure the appliance is nearby and Bluetooth is enabled on it.",
       "not_supported": "Device not supported"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Appliance PIN",
+        "description": "Enter the 6-digit PIN from the appliance display. Leave blank to stay in diagnostic-only mode.",
+        "data": {
+          "pin": "PIN"
+        }
+      }
+    },
+    "error": {
+      "invalid_pin": "PIN must be exactly 6 digits"
     }
   }
 }

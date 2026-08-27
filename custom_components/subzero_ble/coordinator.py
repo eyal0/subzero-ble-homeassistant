@@ -9,10 +9,11 @@ from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .client import SubZeroBleClient
-from .const import UPDATE_INTERVAL_SECONDS
+from .client import SubZeroBleClient, SubZeroInvalidPin
+from .const import CONF_PIN, UPDATE_INTERVAL_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +76,19 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         self.address = entry.data[CONF_ADDRESS]
         self.client: SubZeroBleClient | None = None
 
+    def _pin(self) -> str | None:
+        """Return the configured pairing PIN, if any."""
+        return self.entry.data.get(CONF_PIN) or self.entry.options.get(CONF_PIN)
+
+    async def async_display_pin(self) -> None:
+        """Ask the appliance to show its PIN on the display."""
+        if self.client is None:
+            raise HomeAssistantError("Sub-Zero client is not connected")
+        try:
+            await self.client.async_display_pin()
+        except Exception as err:
+            raise HomeAssistantError(str(err)) from err
+
     def _apply_push(self, data: SubZeroData) -> None:
         """Merge an unsolicited notification into coordinator state."""
         current = self.data or SubZeroData()
@@ -108,13 +122,22 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             )
             raise UpdateFailed(f"Sub-Zero appliance {self.address} not in range")
 
+        pin = self._pin()
         if self.client is None:
-            self.client = SubZeroBleClient(ble_device, on_push=self._handle_push)
+            self.client = SubZeroBleClient(
+                ble_device, on_push=self._handle_push, pin=pin
+            )
         else:
             self.client.update_ble_device(ble_device)
+            if self.client.update_pin(pin):
+                await self.client.async_disconnect()
 
         try:
             parsed = await self.client.poll_state()
+        except SubZeroInvalidPin as err:
+            if self.client is not None:
+                await self.client.async_disconnect()
+            raise UpdateFailed(str(err)) from err
         except Exception as err:
             if self.client is not None:
                 await self.client.async_disconnect()

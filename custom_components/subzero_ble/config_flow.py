@@ -9,10 +9,17 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
 )
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_ADDRESS
+from homeassistant.core import callback
+from homeassistant.helpers import selector
 
-from .const import DOMAIN, LOCAL_NAME_PREFIX
+from .const import CONF_PIN, DOMAIN, LOCAL_NAME_PREFIX, normalize_pin
 
 
 def _is_subzero_device(discovery_info: BluetoothServiceInfoBleak) -> bool:
@@ -28,6 +35,19 @@ def _title(discovery_info: BluetoothServiceInfoBleak) -> str:
     return name
 
 
+def _pin_schema(default: str | None = None) -> vol.Schema:
+    """Return the PIN form schema."""
+    return vol.Schema(
+        {
+            vol.Optional(CONF_PIN, default=default or ""): selector.TextSelector(
+                selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.PASSWORD,
+                )
+            ),
+        }
+    )
+
+
 class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Sub-Zero BLE."""
 
@@ -37,6 +57,14 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._discovery_info: BluetoothServiceInfoBleak | None = None
         self._discovered_devices: dict[str, BluetoothServiceInfoBleak] = {}
+        self._address: str | None = None
+        self._name: str | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow for this config entry."""
+        return SubZeroOptionsFlow(config_entry)
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -61,10 +89,9 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         title = _title(discovery_info)
 
         if user_input is not None:
-            return self.async_create_entry(
-                title=title,
-                data={CONF_ADDRESS: discovery_info.address},
-            )
+            self._address = discovery_info.address
+            self._name = title
+            return await self.async_step_pin()
 
         self._set_confirm_only()
         placeholders = {"name": title}
@@ -83,10 +110,9 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
             discovery_info = self._discovered_devices[address]
-            return self.async_create_entry(
-                title=_title(discovery_info),
-                data={CONF_ADDRESS: address},
-            )
+            self._address = address
+            self._name = _title(discovery_info)
+            return await self.async_step_pin()
 
         if request_active_scan := getattr(
             bluetooth, "async_request_active_scan", None
@@ -124,4 +150,66 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 }
             ),
+        )
+
+    async def async_step_pin(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Collect the 6-digit appliance PIN used for BLE pairing and unlock."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                pin = normalize_pin(user_input.get(CONF_PIN))
+            except ValueError:
+                errors[CONF_PIN] = "invalid_pin"
+            else:
+                assert self._address is not None
+                data: dict[str, Any] = {CONF_ADDRESS: self._address}
+                if pin:
+                    data[CONF_PIN] = pin
+                return self.async_create_entry(
+                    title=self._name or self._address,
+                    data=data,
+                )
+
+        return self.async_show_form(
+            step_id="pin",
+            data_schema=_pin_schema(),
+            errors=errors,
+            description_placeholders={"name": self._name or "the appliance"},
+        )
+
+
+class SubZeroOptionsFlow(OptionsFlow):
+    """Handle PIN changes for an existing Sub-Zero appliance."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize options flow."""
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the pairing PIN."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                pin = normalize_pin(user_input.get(CONF_PIN))
+            except ValueError:
+                errors[CONF_PIN] = "invalid_pin"
+            else:
+                data = {**self._config_entry.data}
+                if pin:
+                    data[CONF_PIN] = pin
+                else:
+                    data.pop(CONF_PIN, None)
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry, data=data
+                )
+                return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_pin_schema(self._config_entry.data.get(CONF_PIN)),
+            errors=errors,
         )
