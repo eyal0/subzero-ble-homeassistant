@@ -1,0 +1,25 @@
+{
+  "domain": "subzero_ble",
+  "name": "Sub-Zero Refrigerator (BLE)",
+  "codeowners": [
+    "@eyal0"
+  ],
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://github.com/eyal0/subzero-ble-homeassistant",
+  "issue_tracker": "https://github.com/eyal0/subzero-ble-homeassistant/issues",
+  "homekit": {},
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "quality_scale": "bronze",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "bluetooth": [
+    {
+      "local_name": "SZG*",
+      "connectable": true
+    }
+  ],
+  "version": "0.1.0"
+}
