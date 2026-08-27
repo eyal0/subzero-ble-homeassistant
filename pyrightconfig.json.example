@@ -1,0 +1,7 @@
+{
+  "include": ["custom_components", "scripts"],
+  "exclude": ["**/__pycache__", ".git"],
+  "extraPaths": ["../home-assistant-core"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic"
+}

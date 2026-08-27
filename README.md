@@ -169,6 +169,18 @@ logger:
 
 After changing Python files in a manual install, do a **full Home Assistant restart** (reload is not enough).
 
+## Development
+
+The integration imports Home Assistant packages that are not installed in a normal editor Python. Current Home Assistant also needs **Python 3.14**, so `pip install homeassistant` on 3.12 will fail.
+
+To make the language server resolve those imports, point it at a local clone of [home-assistant/core](https://github.com/home-assistant/core):
+
+```bash
+cp pyrightconfig.json.example pyrightconfig.json
+```
+
+Then edit `extraPaths` so it is the directory that contains the `homeassistant` package (the Core repo root). `pyrightconfig.json` is gitignored because that path is machine-specific.
+
 ## Brand icon (HACS and Home Assistant)
 
 HACS and Home Assistant both look for brand images next to the integration code, not in a separate brands repo.

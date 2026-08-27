@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 *.so
 
+# Local editor/type-checker config (machine-specific extraPaths)
+pyrightconfig.json
+
 # Tooling caches
 .mypy_cache/
 .pytest_cache/
