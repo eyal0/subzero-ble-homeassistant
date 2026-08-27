@@ -123,6 +123,20 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         value_fn=lambda data: field_text(data, "service"),
     ),
     SubZeroSensorEntityDescription(
+        key="active_faults",
+        name="Active Faults",
+        icon="mdi:alert-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "active_faults"),
+    ),
+    SubZeroSensorEntityDescription(
+        key="notifs",
+        name="Notifications",
+        icon="mdi:bell-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: field_text(data, "notifs"),
+    ),
+    SubZeroSensorEntityDescription(
         key="uptime",
         name="Uptime",
         icon="mdi:timer-outline",

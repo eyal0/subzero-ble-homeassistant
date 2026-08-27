@@ -82,6 +82,7 @@ Not every model reports every field. Missing keys stay `unknown`.
 | Mode | Normal, High Usage, Short Vacation, Long Vacation, or Sabbath. Writable after pairing. |
 | Air Purifier | On/off (`air_filter_on`). Writable after pairing. |
 | Night Mode | On/off (`night_mode` as `1`/`0`). Different from Night Ice. Writable after pairing. |
+| Humidity Control | Normal or Enhanced (`humidity_control` as `1`/`2`). Writable after pairing. |
 | Start pairing | Shows the PIN on the appliance display (needs a configured PIN and a bonded link). |
 
 These temperature entities are **setpoints**, not measured cavity temperatures. The appliance firmware does not expose live fridge/freezer temps over BLE. Values on the wire are Fahrenheit integers. Changing °C/°F on the appliance display is a local preference and does not change the BLE numbers.
@@ -101,6 +102,8 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 | Door Ajar Alarm Timeout | Minutes (diagnostic) |
 | Max Ice Start Time / End Time | Diagnostic text |
 | Service | Diagnostic (JSON if the appliance sends a dict) |
+| Active Faults | Diagnostic text of `active_faults` (empty when none) |
+| Notifications | Diagnostic JSON of `notifs` (empty when none) |
 | Uptime | Seconds since last power cycle (diagnostic) |
 | Firmware Version | e.g. `fw 2.27 / api 5.5` (diagnostic) |
 
@@ -116,6 +119,9 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 | Sabbath Mode | Diagnostic |
 | Service Mode | Diagnostic |
 | Service Required | Problem-class diagnostic |
+| Active Faults | Problem-class diagnostic; on when `active_faults` is non-empty |
+| Notifications | Problem-class diagnostic; on when `notifs` is non-empty |
+| Pairing Window | Diagnostic; on when the appliance BLE pairing window is open |
 
 ## Supported devices
 
@@ -130,7 +136,6 @@ The protocol and many other fridge models are documented in [JonGilmore/esphome-
 - **One BLE client.** Phone app, ESPHome, and this integration cannot share the connection.
 - **Pairing is BlueZ-only.** Home Assistant Core on macOS or Windows will not run the passkey agent used here.
 - **Setpoint writes** need a PIN, a bonded link, and the encrypted control channel. The appliance may acknowledge a `set` and still not apply it on some models.
-- **Humidity and similar extras** are read-only in this integration.
 - Occasional GATT drops during a poll are common (idle timeout or another client). The integration reconnects on the next update.
 
 ## Troubleshooting

@@ -29,6 +29,8 @@ from .const import (
     CONNECTION_INVALID_PIN,
     CONNECTION_NOT_IN_RANGE,
     DOMAIN,
+    HUMIDITY_CONTROL_LABELS,
+    HUMIDITY_CONTROL_VALUES,
     ICE_MAKER_MAX_ICE,
     ICE_MAKER_MODE_PARAMS,
     ICE_MAKER_NIGHT_ICE,
@@ -97,6 +99,18 @@ def field_bool(data: SubZeroData, key: str) -> bool | None:
     return bool(data.fields[key])
 
 
+def field_nonempty(data: SubZeroData, key: str) -> bool | None:
+    """Return True if an appliance list/string field has content."""
+    if key not in data.fields:
+        return None
+    value = data.fields[key]
+    if value is None:
+        return False
+    if isinstance(value, (list, dict, str)):
+        return bool(value)
+    return True
+
+
 def ice_maker_mode(data: SubZeroData) -> str | None:
     """Map ice_maker_on / max_ice_on / night_ice_on to a select option."""
     if "ice_maker_on" not in data.fields:
@@ -125,6 +139,18 @@ def appliance_mode(data: SubZeroData) -> str | None:
     return APPLIANCE_NORMAL
 
 
+def humidity_control(data: SubZeroData) -> str | None:
+    """Map humidity_control 1/2 to Normal/Enhanced."""
+    if "humidity_control" not in data.fields:
+        return None
+    value = data.fields["humidity_control"]
+    try:
+        wire = int(value)
+    except (TypeError, ValueError):
+        return None
+    return HUMIDITY_CONTROL_LABELS.get(wire)
+
+
 def field_text(data: SubZeroData, key: str) -> str | None:
     """Return an appliance field as a diagnostic string."""
     if key not in data.fields:
@@ -133,6 +159,8 @@ def field_text(data: SubZeroData, key: str) -> str | None:
     if value is None:
         return None
     if isinstance(value, (dict, list)):
+        if not value:
+            return ""
         return json.dumps(value, separators=(",", ":"))
     return str(value)
 
@@ -309,6 +337,13 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         await self._async_set_grouped_flags(
             APPLIANCE_MODE_PARAMS, option, "appliance"
         )
+
+    async def async_set_humidity_control(self, option: str) -> None:
+        """Write humidity_control as 1 (Normal) or 2 (Enhanced)."""
+        wire = HUMIDITY_CONTROL_VALUES.get(option)
+        if wire is None:
+            raise HomeAssistantError(f"Unknown humidity control mode: {option}")
+        await self.async_set_value("humidity_control", wire)
 
     async def _async_set_grouped_flags(
         self, table: dict[str, dict[str, bool]], option: str, label: str

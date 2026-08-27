@@ -17,7 +17,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
 from .const import DOMAIN
-from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator, field_bool
+from .coordinator import (
+    SubZeroData,
+    SubZeroDataUpdateCoordinator,
+    field_bool,
+    field_nonempty,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -81,6 +86,27 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SubZeroBinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
         is_on_fn=lambda data: field_bool(data, "service_required"),
+    ),
+    SubZeroBinarySensorEntityDescription(
+        key="has_active_faults",
+        name="Active Faults",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        is_on_fn=lambda data: field_nonempty(data, "active_faults"),
+    ),
+    SubZeroBinarySensorEntityDescription(
+        key="has_notifications",
+        name="Notifications",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        is_on_fn=lambda data: field_nonempty(data, "notifs"),
+    ),
+    SubZeroBinarySensorEntityDescription(
+        key="pin_window_open",
+        name="Pairing Window",
+        icon="mdi:key-plus",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        is_on_fn=lambda data: field_bool(data, "pin_window_open"),
     ),
 )
 

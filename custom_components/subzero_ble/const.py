@@ -123,6 +123,18 @@ APPLIANCE_MODE_PARAMS: dict[str, dict[str, bool]] = {
     APPLIANCE_SABBATH: _appliance_mode_params("sabbath_on"),
 }
 
+HUMIDITY_NORMAL = "Normal"
+HUMIDITY_ENHANCED = "Enhanced"
+HUMIDITY_OPTIONS = (HUMIDITY_NORMAL, HUMIDITY_ENHANCED)
+# Confirmed on-appliance: 1=Normal, 2=Enhanced. 0 is ignored.
+HUMIDITY_CONTROL_VALUES: dict[str, int] = {
+    HUMIDITY_NORMAL: 1,
+    HUMIDITY_ENHANCED: 2,
+}
+HUMIDITY_CONTROL_LABELS: dict[int, str] = {
+    value: label for label, value in HUMIDITY_CONTROL_VALUES.items()
+}
+
 
 def normalize_pin(pin: str | None) -> str | None:
     """Return a 6-digit PIN or None if the value is empty."""

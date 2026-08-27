@@ -11,11 +11,17 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
-from .const import APPLIANCE_MODE_OPTIONS, DOMAIN, ICE_MAKER_OPTIONS
+from .const import (
+    APPLIANCE_MODE_OPTIONS,
+    DOMAIN,
+    HUMIDITY_OPTIONS,
+    ICE_MAKER_OPTIONS,
+)
 from .coordinator import (
     SubZeroData,
     SubZeroDataUpdateCoordinator,
     appliance_mode,
+    humidity_control,
     ice_maker_mode,
 )
 
@@ -44,6 +50,14 @@ SELECT_DESCRIPTIONS: tuple[SubZeroSelectEntityDescription, ...] = (
         options=list(APPLIANCE_MODE_OPTIONS),
         current_fn=appliance_mode,
         set_fn=SubZeroDataUpdateCoordinator.async_set_appliance_mode,
+    ),
+    SubZeroSelectEntityDescription(
+        key="humidity_control",
+        name="Humidity Control",
+        icon="mdi:water-percent",
+        options=list(HUMIDITY_OPTIONS),
+        current_fn=humidity_control,
+        set_fn=SubZeroDataUpdateCoordinator.async_set_humidity_control,
     ),
 )
 
