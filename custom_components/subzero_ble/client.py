@@ -16,6 +16,10 @@ from .const import (
     CHAR_D6_UUID,
     CHAR_D7_UUID,
     CONNECT_TIMEOUT,
+    CONNECTION_CONNECTED,
+    CONNECTION_DIAGNOSTIC,
+    CONNECTION_DISCONNECTED,
+    CONNECTION_PAIRED,
     GET_ASYNC_COMMAND,
     GET_COMMAND,
     MAX_FRAME_BYTES,
@@ -43,6 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 _BLE_LOG = logging.getLogger("custom_components.subzero_ble.ble")
 
 OnPushCallback = Callable[["SubZeroData"], None]
+OnDisconnectCallback = Callable[[], None]
 
 
 class SubZeroCharacteristicMissing(BleakError):
@@ -60,11 +65,13 @@ class SubZeroBleClient:
         self,
         ble_device: BLEDevice,
         on_push: OnPushCallback | None = None,
+        on_disconnect: OnDisconnectCallback | None = None,
         pin: str | None = None,
     ) -> None:
         """Initialize client."""
         self._ble_device = ble_device
         self._on_push = on_push
+        self._on_disconnect = on_disconnect
         self._pin = pin
         self._buffers: dict[str, bytearray] = {}
         self._response_future: asyncio.Future[bytes] | None = None
@@ -90,6 +97,16 @@ class SubZeroBleClient:
         self._unlocked = False
         return True
 
+    def connection_status(self) -> str:
+        """Return a short BLE/pairing status for Home Assistant."""
+        if self._client is None or not self._client.is_connected:
+            return CONNECTION_DISCONNECTED
+        if self._unlocked:
+            return CONNECTION_PAIRED
+        if not self._pin:
+            return CONNECTION_DIAGNOSTIC
+        return CONNECTION_CONNECTED
+
     def _disconnected(self, _client: BleakClientWithServiceCache) -> None:
         """Handle an unexpected disconnect from the appliance."""
         self._poll_channel = None
@@ -109,6 +126,8 @@ class SubZeroBleClient:
             future.get_loop().call_soon_threadsafe(
                 _fail_future, future, BleakError("Sub-Zero disconnected during poll")
             )
+        if self._on_disconnect:
+            self._on_disconnect()
 
     def _notification_handler(
         self, characteristic: BleakGATTCharacteristic, data: bytearray

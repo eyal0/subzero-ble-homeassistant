@@ -25,6 +25,9 @@ from .const import (
     APPLIANCE_SABBATH,
     APPLIANCE_SHORT_VACATION,
     CONF_PIN,
+    CONNECTION_DISCONNECTED,
+    CONNECTION_INVALID_PIN,
+    CONNECTION_NOT_IN_RANGE,
     DOMAIN,
     ICE_MAKER_MAX_ICE,
     ICE_MAKER_MODE_PARAMS,
@@ -205,6 +208,33 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         self.entry = entry
         self.address = entry.data[CONF_ADDRESS]
         self.client: SubZeroBleClient | None = None
+        self._connection_status = CONNECTION_DISCONNECTED
+
+    @property
+    def connection_status(self) -> str:
+        """Return BLE connection / pairing status for the diagnostic sensor."""
+        return self._connection_status
+
+    def _set_connection_status(self, status: str) -> None:
+        self._connection_status = status
+
+    def _handle_client_disconnect(self) -> None:
+        """Unexpected GATT drop; keep the status entity available."""
+
+        def _apply() -> None:
+            if self._connection_status != CONNECTION_INVALID_PIN:
+                self._connection_status = CONNECTION_DISCONNECTED
+            self.async_update_listeners()
+
+        self.hass.loop.call_soon_threadsafe(_apply)
+
+    def _make_client(self, ble_device: Any) -> SubZeroBleClient:
+        return SubZeroBleClient(
+            ble_device,
+            on_push=self._handle_push,
+            on_disconnect=self._handle_client_disconnect,
+            pin=self._pin(),
+        )
 
     def _pin(self) -> str | None:
         """Return the configured pairing PIN, if any."""
@@ -226,9 +256,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
                 "Writes use encrypted channel D5."
             )
         if self.client is None:
-            self.client = SubZeroBleClient(
-                ble_device, on_push=self._handle_push, pin=pin
-            )
+            self.client = self._make_client(ble_device)
         else:
             self.client.update_ble_device(ble_device)
             if self.client.update_pin(pin):
@@ -335,13 +363,12 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
                 "Sub-Zero appliance %s is not currently visible over Bluetooth",
                 self.address,
             )
+            self._set_connection_status(CONNECTION_NOT_IN_RANGE)
             raise UpdateFailed(f"Sub-Zero appliance {self.address} not in range")
 
         pin = self._pin()
         if self.client is None:
-            self.client = SubZeroBleClient(
-                ble_device, on_push=self._handle_push, pin=pin
-            )
+            self.client = self._make_client(ble_device)
         else:
             self.client.update_ble_device(ble_device)
             if self.client.update_pin(pin):
@@ -352,11 +379,15 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         except SubZeroInvalidPin as err:
             if self.client is not None:
                 await self.client.async_disconnect()
+            self._set_connection_status(CONNECTION_INVALID_PIN)
             raise UpdateFailed(str(err)) from err
         except Exception as err:
             if self.client is not None:
                 await self.client.async_disconnect()
+            self._set_connection_status(CONNECTION_DISCONNECTED)
             raise UpdateFailed(f"BLE communication error: {err}") from err
+
+        self._set_connection_status(self.client.connection_status())
 
         current = self.data or SubZeroData()
         merged = current.merge(parsed)

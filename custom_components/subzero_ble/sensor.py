@@ -21,7 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
-from .const import DOMAIN
+from .const import CONNECTION_STATUSES, DOMAIN
 from .coordinator import (
     SubZeroData,
     SubZeroDataUpdateCoordinator,
@@ -150,9 +150,15 @@ async def async_setup_entry(
 ) -> None:
     """Set up Sub-Zero sensors from config entry."""
     coordinator = entry.runtime_data
+    address = entry.data["address"]
     async_add_entities(
-        SubZeroSensorEntity(coordinator, desc, entry.data["address"])
-        for desc in SENSOR_DESCRIPTIONS
+        [
+            *(
+                SubZeroSensorEntity(coordinator, desc, address)
+                for desc in SENSOR_DESCRIPTIONS
+            ),
+            SubZeroConnectionSensor(coordinator, address),
+        ]
     )
 
 
@@ -182,3 +188,36 @@ class SubZeroSensorEntity(CoordinatorEntity[SubZeroDataUpdateCoordinator], Senso
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+class SubZeroConnectionSensor(
+    CoordinatorEntity[SubZeroDataUpdateCoordinator], SensorEntity
+):
+    """BLE connection and pairing status; stays available when a poll fails."""
+
+    _attr_name = "Connection Status"
+    _attr_icon = "mdi:bluetooth-connect"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(CONNECTION_STATUSES)
+
+    def __init__(
+        self, coordinator: SubZeroDataUpdateCoordinator, address: str
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{address}_connection_status"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, address)},
+            name="Sub-Zero Refrigerator",
+            manufacturer="Sub-Zero",
+        )
+
+    @property
+    def available(self) -> bool:
+        """Keep the status readable while the rest of the device is unavailable."""
+        return True
+
+    @property
+    def native_value(self) -> str:
+        """Return the latest connection status."""
+        return self.coordinator.connection_status

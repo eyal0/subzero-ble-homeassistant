@@ -88,6 +88,7 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 
 | Entity | Description |
 | --- | --- |
+| Connection Status | Diagnostic: Not in range, Disconnected, Diagnostic only, Connected, Paired, or Invalid PIN |
 | Water Filter Life Remaining | Percent remaining |
 | Air Filter Life Remaining | Percent remaining |
 | Appliance Model | Diagnostic |
