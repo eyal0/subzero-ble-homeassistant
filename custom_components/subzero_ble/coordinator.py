@@ -97,10 +97,15 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             await self.client.async_disconnect()
 
     async def _async_update_data(self) -> SubZeroData:
+        _LOGGER.info("Starting Sub-Zero update for %s", self.address)
         ble_device = bluetooth.async_ble_device_from_address(
             self.hass, self.address, connectable=True
         )
         if ble_device is None:
+            _LOGGER.warning(
+                "Sub-Zero appliance %s is not currently visible over Bluetooth",
+                self.address,
+            )
             raise UpdateFailed(f"Sub-Zero appliance {self.address} not in range")
 
         if self.client is None:

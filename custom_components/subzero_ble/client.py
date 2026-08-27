@@ -14,6 +14,7 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 from .const import (
     CHAR_D6_UUID,
     CHAR_D7_UUID,
+    CONNECT_TIMEOUT,
     GET_ASYNC_COMMAND,
     MAX_FRAME_BYTES,
     POLL_TIMEOUT,
@@ -175,12 +176,15 @@ class SubZeroBleClient:
             self._ble_device.name,
             self._ble_device.address,
         )
-        self._client = await establish_connection(
-            BleakClientWithServiceCache,
-            self._ble_device,
-            name=self._ble_device.name or self._ble_device.address,
-            disconnected_callback=self._disconnected,
-            max_attempts=3,
+        self._client = await asyncio.wait_for(
+            establish_connection(
+                BleakClientWithServiceCache,
+                self._ble_device,
+                name=self._ble_device.name or self._ble_device.address,
+                disconnected_callback=self._disconnected,
+                max_attempts=3,
+            ),
+            timeout=CONNECT_TIMEOUT,
         )
         _log_gatt_table(self._client)
         self._poll_channel = _select_poll_channel(self._client)

@@ -1,6 +1,7 @@
 """Constants for the Sub-Zero BLE integration."""
 
 DOMAIN = "subzero_ble"
+VERSION = "0.7.0"
 
 # Advertised local names start with SZG (Sub-Zero Group).
 LOCAL_NAME_PREFIX = "SZG"
@@ -20,5 +21,6 @@ GET_ASYNC_COMMAND = b'{"cmd":"get_async"}\n'
 
 POLL_TIMEOUT = 15.0
 SUBSCRIBE_TIMEOUT = 5.0
+CONNECT_TIMEOUT = 30.0
 MAX_FRAME_BYTES = 4096
 UPDATE_INTERVAL_SECONDS = 10
