@@ -20,13 +20,11 @@ from . import SubZeroConfigEntry
 from .const import DOMAIN
 from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator
 
-# Wire values match the appliance BLE integers (Fahrenheit). Typical Sub-Zero
-# fridge range is 34–45°F; freezer is about -5–5°F. Bounds are slightly wider
-# so a reported value outside the usual band still displays.
-FRIDGE_TEMP_MIN = 30
-FRIDGE_TEMP_MAX = 48
-FREEZER_TEMP_MIN = -10
-FREEZER_TEMP_MAX = 10
+# Wire values match the appliance BLE integers (Fahrenheit).
+FRIDGE_TEMP_MIN = 34
+FRIDGE_TEMP_MAX = 42
+FREEZER_TEMP_MIN = -5
+FREEZER_TEMP_MAX = 5
 
 
 @dataclass(frozen=True, kw_only=True)

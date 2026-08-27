@@ -76,8 +76,8 @@ Not every model reports every field. Missing keys stay `unknown`.
 
 | Entity | Description |
 | --- | --- |
-| Refrigerator Temperature | Fridge **setpoint** (°F), writable after pairing. Typical range is about 34–45°F; the entity allows 30–48. |
-| Freezer Temperature | Freezer **setpoint** (°F), writable after pairing. Typical range is about −5–5°F; the entity allows −10–10. |
+| Refrigerator Temperature | Fridge **setpoint** (°F), writable after pairing. Valid range is 34–42°F. |
+| Freezer Temperature | Freezer **setpoint** (°F), writable after pairing. Valid range is −5–5°F. |
 | Start pairing | Shows the PIN on the appliance display (needs a configured PIN and a bonded link). |
 
 These temperature entities are **setpoints**, not measured cavity temperatures. The appliance firmware does not expose live fridge/freezer temps over BLE. Values on the wire are Fahrenheit integers. Changing °C/°F on the appliance display is a local preference and does not change the BLE numbers.
