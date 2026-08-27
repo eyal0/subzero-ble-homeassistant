@@ -1,0 +1,13 @@
+# Python bytecode / compile caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
