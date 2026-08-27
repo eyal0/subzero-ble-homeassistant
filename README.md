@@ -80,6 +80,7 @@ Not every model reports every field. Missing keys stay `unknown`.
 | Freezer Temperature | Freezer **setpoint** (°F), writable after pairing. Valid range is −5–5°F. |
 | Ice Maker | Off, Normal, Night Ice, or Max Ice. Writable after pairing. |
 | Mode | Normal, High Usage, Short Vacation, Long Vacation, or Sabbath. Writable after pairing. |
+| Air Purifier | On/off (`air_filter_on`). Writable after pairing. |
 | Start pairing | Shows the PIN on the appliance display (needs a configured PIN and a bonded link). |
 
 These temperature entities are **setpoints**, not measured cavity temperatures. The appliance firmware does not expose live fridge/freezer temps over BLE. Values on the wire are Fahrenheit integers. Changing °C/°F on the appliance display is a local preference and does not change the BLE numbers.

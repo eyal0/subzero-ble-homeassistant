@@ -287,6 +287,15 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             update = SubZeroData(fields={property_key: wire})
         self._apply_push(update)
 
+    async def async_set_bool(self, key: str, value: bool) -> None:
+        """Write a boolean appliance property on D5."""
+        client = await self._async_ready_client(require_pin=True)
+        try:
+            await client.async_set_property(key, value)
+        except Exception as err:
+            raise HomeAssistantError(str(err)) from err
+        self._apply_push(SubZeroData(fields={key: value}))
+
     async def async_set_ice_maker_mode(self, option: str) -> None:
         """Write ice_maker_on / max_ice_on / night_ice_on for a UI mode."""
         await self._async_set_grouped_flags(ICE_MAKER_MODE_PARAMS, option, "ice maker")
