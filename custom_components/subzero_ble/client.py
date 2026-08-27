@@ -136,16 +136,6 @@ class SubZeroBleClient:
         _log_ble_pdu("RX", characteristic, data)
         uuid = str(characteristic.uuid).lower()
         buffer = self._buffers.setdefault(uuid, bytearray())
-        # A new JSON frame starting with `{` while we are still waiting for
-        # the previous linefeed means a prior indication was truncated.
-        # Discard the partial message rather than splicing.
-        if data.startswith(b"{") and buffer and b"\n" not in buffer:
-            _LOGGER.debug(
-                "Discarding %s bytes of truncated JSON before new frame",
-                len(buffer),
-            )
-            buffer.clear()
-
         buffer.extend(data)
         if len(buffer) > MAX_FRAME_BYTES:
             _LOGGER.warning("Sub-Zero BLE reassembly buffer overflow; resetting")
