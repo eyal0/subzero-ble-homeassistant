@@ -68,10 +68,10 @@ ICE_MAKER_NORMAL = "Normal"
 ICE_MAKER_NIGHT_ICE = "Night Ice"
 ICE_MAKER_MAX_ICE = "Max Ice"
 ICE_MAKER_OPTIONS = (
-    ICE_MAKER_OFF,
     ICE_MAKER_NORMAL,
-    ICE_MAKER_NIGHT_ICE,
     ICE_MAKER_MAX_ICE,
+    ICE_MAKER_NIGHT_ICE,
+    ICE_MAKER_OFF,
 )
 
 # BLE has no ice-mode verb; the four UI states are these three booleans.

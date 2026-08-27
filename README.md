@@ -86,7 +86,7 @@ Not every model reports every field. Missing keys stay `unknown`.
 | --- | --- |
 | Refrigerator Temperature | Fridge **setpoint** (°F), writable after pairing. Valid range is 34–42°F. |
 | Freezer Temperature | Freezer **setpoint** (°F), writable after pairing. Valid range is −5–5°F. |
-| Ice Maker | Off, Normal, Night Ice, or Max Ice. Writable after pairing. |
+| Ice Maker | Normal, Max Ice, Night Ice, or Off. Writable after pairing. |
 | Mode | Normal, High Usage, Short Vacation, Long Vacation, or Sabbath. Writable after pairing. |
 | Air Purifier | On/off (`air_filter_on`). Writable after pairing. |
 | Night Mode | On/off (`night_mode` as `1`/`0`). Different from Night Ice. Writable after pairing. |
