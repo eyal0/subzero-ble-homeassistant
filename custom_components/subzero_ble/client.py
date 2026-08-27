@@ -25,7 +25,12 @@ from .const import (
     display_pin_command,
     unlock_command,
 )
-from .pairing import SubZeroPairingError, async_pair_with_passkey
+from .pairing import (
+    PairingAgentSession,
+    SubZeroPairingError,
+    async_pair_with_passkey,
+    bleak_message_bus,
+)
 
 if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
@@ -69,6 +74,7 @@ class SubZeroBleClient:
         self._closing = False
         self._unlocked = False
         self._use_get_verb = False
+        self._pairing: PairingAgentSession | None = None
 
     def update_ble_device(self, ble_device: BLEDevice) -> None:
         """Update BLE device reference when HA discovers changes."""
@@ -88,6 +94,7 @@ class SubZeroBleClient:
         self._subscribed.clear()
         self._unlocked = False
         self._buffers.clear()
+        self._pairing = None
         if self._closing:
             return
         _LOGGER.warning(
@@ -179,30 +186,66 @@ class SubZeroBleClient:
             return self._parse_payload(raw)
 
     async def async_display_pin(self, duration: int = 30) -> None:
-        """Ask the appliance to show its PIN on the display for `duration` seconds."""
-        async with self._lock:
-            await self._ensure_connected()
-            assert self._client is not None
-            channel = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
-            if channel is None:
-                raise BleakError("D5 is not available; pair the appliance first")
-            await self._subscribe_optional(channel)
-            await self._write_and_wait(
-                channel, display_pin_command(duration), timeout=UNLOCK_TIMEOUT
+        """Pair if needed, then ask the appliance to show its PIN on the display."""
+        if not self._pin:
+            raise BleakError(
+                "Enter the 6-digit PIN under Configure first. "
+                "This button uses encrypted channel D5; the fridge shows the "
+                "code during BLE pairing, and display_pin only works after bonding."
             )
+        async with self._lock:
+            await self._ensure_connected(require_pair=True)
+            try:
+                await self._write_display_pin(duration)
+            except BleakError as err:
+                if not _is_insufficient_auth(err):
+                    raise
+                _LOGGER.info(
+                    "display_pin hit insufficient authentication; "
+                    "re-pairing and reconnecting"
+                )
+                await self._reconnect_encrypted(force_pair=True)
+                await self._write_display_pin(duration)
+
+    async def _write_display_pin(self, duration: int) -> None:
+        """Write display_pin on D5. Requires an encrypted, paired link."""
+        assert self._client is not None
+        channel = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
+        if channel is None:
+            raise BleakError(
+                "D5 is not available. Pairing may not have completed — "
+                "check the PIN and watch the appliance display."
+            )
+        await self._subscribe_optional(channel)
+        if str(channel.uuid).lower() not in self._subscribed:
+            raise BleakError(
+                "Could not subscribe to D5. The adapter is not bonded yet."
+            )
+        await self._write_and_wait(
+            channel, display_pin_command(duration), timeout=UNLOCK_TIMEOUT
+        )
+        _LOGGER.info("display_pin sent; the appliance should show the PIN")
 
     async def async_disconnect(self) -> None:
         """Drop the BLE connection if it is still open."""
         async with self._lock:
-            self._closing = True
-            client = self._client
-            self._client = None
-            self._poll_channel = None
-            self._unlocked = False
-            subscribed = list(self._subscribed)
-            self._subscribed.clear()
-            if client is None or not client.is_connected:
-                return
+            await self._disconnect_unlocked()
+
+    async def _disconnect_unlocked(self) -> None:
+        """Disconnect while already holding the client lock."""
+        if self._pairing is not None:
+            await self._pairing.stop()
+            self._pairing = None
+        self._closing = True
+        client = self._client
+        self._client = None
+        self._poll_channel = None
+        self._unlocked = False
+        subscribed = list(self._subscribed)
+        self._subscribed.clear()
+        if client is None:
+            return
+        if client.is_connected:
             for uuid in subscribed:
                 try:
                     _BLE_LOG.debug("CCCD unsubscribe %s", uuid)
@@ -212,11 +255,15 @@ class SubZeroBleClient:
                         "Failed to stop notifications on %s", uuid, exc_info=True
                     )
             await client.disconnect()
-            _LOGGER.info("Disconnected from Sub-Zero %s", self._ble_device.address)
+        _LOGGER.info("Disconnected from Sub-Zero %s", self._ble_device.address)
 
-    async def _ensure_connected(self) -> None:
+    async def _ensure_connected(self, require_pair: bool = False) -> None:
         """Connect and subscribe if we are not already connected."""
         if self._client and self._client.is_connected and self._poll_channel:
+            if require_pair and self._pin and not self._unlocked:
+                # Existing D7 session is unencrypted; D5/D6 need a bonded link.
+                await self._reconnect_encrypted(force_pair=False)
+                return
             if self._pin and not self._unlocked:
                 d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
                 d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
@@ -225,8 +272,15 @@ class SubZeroBleClient:
                     self._poll_channel = d6
             return
 
-        self._closing = False
+        await self._connect_and_setup(require_pair=require_pair)
 
+    async def _connect_and_setup(
+        self,
+        require_pair: bool = False,
+        encrypt_reconnect: bool = True,
+    ) -> None:
+        """Establish GATT, optionally pair, then subscribe."""
+        self._closing = False
         _LOGGER.info(
             "Connecting to Sub-Zero %s (%s)",
             self._ble_device.name,
@@ -251,10 +305,52 @@ class SubZeroBleClient:
         )
         if self._pin:
             try:
-                await async_pair_with_passkey(self._ble_device, self._pin)
+                await self._ensure_paired()
+                if encrypt_reconnect:
+                    _LOGGER.info(
+                        "Reconnecting so the GATT link uses the BLE bond"
+                    )
+                    await self._disconnect_unlocked()
+                    await self._connect_and_setup(
+                        require_pair=require_pair,
+                        encrypt_reconnect=False,
+                    )
+                    return
             except SubZeroPairingError as err:
+                if require_pair:
+                    raise
                 _LOGGER.warning("BLE pairing did not complete: %s", err)
 
+        await self._subscribe_and_unlock()
+
+    async def _ensure_paired(self) -> None:
+        """Register a KeyboardOnly agent on the GATT bus and Pair()."""
+        assert self._client is not None
+        assert self._pin is not None
+        if self._pairing is None:
+            self._pairing = PairingAgentSession(self._pin)
+            await self._pairing.start(bleak_message_bus(self._client))
+        await async_pair_with_passkey(
+            self._ble_device,
+            self._pin,
+            client=self._client,
+            session=self._pairing,
+        )
+
+    async def _reconnect_encrypted(self, force_pair: bool = False) -> None:
+        """Drop the unencrypted ATT link and reconnect after pairing."""
+        if force_pair and self._client is not None and hasattr(self._client, "unpair"):
+            _LOGGER.info("Removing existing BlueZ bond for KeyboardOnly pairing")
+            try:
+                await self._client.unpair()
+            except Exception as err:
+                _LOGGER.debug("unpair: %s", err)
+        await self._disconnect_unlocked()
+        await self._connect_and_setup(require_pair=True, encrypt_reconnect=True)
+
+    async def _subscribe_and_unlock(self) -> None:
+        """Subscribe to D7 (and D5/D6 after a PIN) and unlock encrypted channels."""
+        assert self._client is not None
         d7 = _characteristic_by_uuid(self._client, CHAR_D7_UUID)
         d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
         d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
@@ -304,9 +400,19 @@ class SubZeroBleClient:
                 continue
             name = _channel_name(channel)
             _LOGGER.info("Sending unlock_channel on %s", name)
-            raw = await self._write_and_wait(
-                channel, command, timeout=UNLOCK_TIMEOUT, redact=True
-            )
+            try:
+                raw = await self._write_and_wait(
+                    channel, command, timeout=UNLOCK_TIMEOUT, redact=True
+                )
+            except BleakError as err:
+                if _is_insufficient_auth(err):
+                    _LOGGER.warning(
+                        "unlock_channel on %s needs an encrypted link: %s",
+                        name,
+                        err,
+                    )
+                    continue
+                raise
             payload = _loads_json(raw)
             status = None if payload is None else payload.get("status")
             if status == 302:
@@ -456,6 +562,22 @@ def _resolve_future(future: asyncio.Future[bytes], result: bytes) -> None:
 def _fail_future(future: asyncio.Future[bytes], err: Exception) -> None:
     if not future.done():
         future.set_exception(err)
+
+
+def _is_insufficient_auth(err: BaseException) -> bool:
+    """Return True if BlueZ rejected a GATT op because the link is not bonded."""
+    text = str(err).lower()
+    return any(
+        marker in text
+        for marker in (
+            "insufficient authentication",
+            "insufficient encryption",
+            "error=5",
+            "error=8",
+            "authentication is required",
+            "not paired",
+        )
+    )
 
 
 def _optional_bool(fields: dict[str, Any], *keys: str) -> bool | None:

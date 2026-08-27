@@ -81,9 +81,29 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         return self.entry.data.get(CONF_PIN) or self.entry.options.get(CONF_PIN)
 
     async def async_display_pin(self) -> None:
-        """Ask the appliance to show its PIN on the display."""
+        """Pair if needed, then ask the appliance to show its PIN on the display."""
+        ble_device = bluetooth.async_ble_device_from_address(
+            self.hass, self.address, connectable=True
+        )
+        if ble_device is None:
+            raise HomeAssistantError(
+                f"Sub-Zero appliance {self.address} is not currently in range"
+            )
+        pin = self._pin()
+        if not pin:
+            raise HomeAssistantError(
+                "Enter the 6-digit PIN under Configure first. "
+                "Start pairing uses encrypted channel D5; without a PIN the "
+                "adapter cannot bond. Watch the fridge display during pairing."
+            )
         if self.client is None:
-            raise HomeAssistantError("Sub-Zero client is not connected")
+            self.client = SubZeroBleClient(
+                ble_device, on_push=self._handle_push, pin=pin
+            )
+        else:
+            self.client.update_ble_device(ble_device)
+            if self.client.update_pin(pin):
+                await self.client.async_disconnect()
         try:
             await self.client.async_display_pin()
         except Exception as err:
