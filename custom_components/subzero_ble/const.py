@@ -36,7 +36,7 @@ PAIR_TIMEOUT = 60.0
 UNLOCK_TIMEOUT = 15.0
 MAX_FRAME_BYTES = 4096
 UPDATE_INTERVAL_SECONDS = 10
-# ESPHome found back-to-back D5 sets can drop; space grouped ice-mode writes.
+# ESPHome found back-to-back D5 sets can drop; space grouped flag writes.
 SET_WRITE_GAP_SECONDS = 0.75
 
 ICE_MAKER_OFF = "Off"
@@ -72,6 +72,40 @@ ICE_MAKER_MODE_PARAMS: dict[str, dict[str, bool]] = {
         "max_ice_on": True,
         "night_ice_on": False,
     },
+}
+
+APPLIANCE_NORMAL = "Normal"
+APPLIANCE_HIGH_USAGE = "High Usage"
+APPLIANCE_SHORT_VACATION = "Short Vacation"
+APPLIANCE_LONG_VACATION = "Long Vacation"
+APPLIANCE_SABBATH = "Sabbath"
+APPLIANCE_MODE_OPTIONS = (
+    APPLIANCE_NORMAL,
+    APPLIANCE_HIGH_USAGE,
+    APPLIANCE_SHORT_VACATION,
+    APPLIANCE_LONG_VACATION,
+    APPLIANCE_SABBATH,
+)
+
+APPLIANCE_MODE_FLAGS = (
+    "high_use_on",
+    "short_vacation_on",
+    "long_vacation_on",
+    "sabbath_on",
+)
+
+
+def _appliance_mode_params(active: str | None) -> dict[str, bool]:
+    return {key: key == active for key in APPLIANCE_MODE_FLAGS}
+
+
+# BLE has no appliance-mode verb; the five UI states are these four booleans.
+APPLIANCE_MODE_PARAMS: dict[str, dict[str, bool]] = {
+    APPLIANCE_NORMAL: _appliance_mode_params(None),
+    APPLIANCE_HIGH_USAGE: _appliance_mode_params("high_use_on"),
+    APPLIANCE_SHORT_VACATION: _appliance_mode_params("short_vacation_on"),
+    APPLIANCE_LONG_VACATION: _appliance_mode_params("long_vacation_on"),
+    APPLIANCE_SABBATH: _appliance_mode_params("sabbath_on"),
 }
 
 

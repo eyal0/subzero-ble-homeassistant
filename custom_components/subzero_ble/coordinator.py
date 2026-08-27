@@ -17,6 +17,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .client import SubZeroBleClient, SubZeroInvalidPin
 from .const import (
+    APPLIANCE_HIGH_USAGE,
+    APPLIANCE_LONG_VACATION,
+    APPLIANCE_MODE_FLAGS,
+    APPLIANCE_MODE_PARAMS,
+    APPLIANCE_NORMAL,
+    APPLIANCE_SABBATH,
+    APPLIANCE_SHORT_VACATION,
     CONF_PIN,
     DOMAIN,
     ICE_MAKER_MAX_ICE,
@@ -98,6 +105,21 @@ def ice_maker_mode(data: SubZeroData) -> str | None:
     if data.fields.get("night_ice_on"):
         return ICE_MAKER_NIGHT_ICE
     return ICE_MAKER_NORMAL
+
+
+def appliance_mode(data: SubZeroData) -> str | None:
+    """Map high_use / vacation / sabbath flags to a select option."""
+    if not any(key in data.fields for key in APPLIANCE_MODE_FLAGS):
+        return None
+    if data.fields.get("sabbath_on"):
+        return APPLIANCE_SABBATH
+    if data.fields.get("long_vacation_on"):
+        return APPLIANCE_LONG_VACATION
+    if data.fields.get("short_vacation_on"):
+        return APPLIANCE_SHORT_VACATION
+    if data.fields.get("high_use_on"):
+        return APPLIANCE_HIGH_USAGE
+    return APPLIANCE_NORMAL
 
 
 def field_text(data: SubZeroData, key: str) -> str | None:
@@ -239,17 +261,30 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
 
     async def async_set_ice_maker_mode(self, option: str) -> None:
         """Write ice_maker_on / max_ice_on / night_ice_on for a UI mode."""
-        params = ICE_MAKER_MODE_PARAMS.get(option)
+        await self._async_set_grouped_flags(ICE_MAKER_MODE_PARAMS, option, "ice maker")
+
+    async def async_set_appliance_mode(self, option: str) -> None:
+        """Write high_use / vacation / sabbath flags for a UI mode."""
+        await self._async_set_grouped_flags(
+            APPLIANCE_MODE_PARAMS, option, "appliance"
+        )
+
+    async def _async_set_grouped_flags(
+        self, table: dict[str, dict[str, bool]], option: str, label: str
+    ) -> None:
+        """Write a mutually exclusive group of boolean properties on D5."""
+        params = table.get(option)
         if params is None:
-            raise HomeAssistantError(f"Unknown ice maker mode: {option}")
+            raise HomeAssistantError(f"Unknown {label} mode: {option}")
         client = await self._async_ready_client(require_pin=True)
         try:
             await client.async_set_properties(params)
         except Exception as err:
             raise HomeAssistantError(str(err)) from err
-        self._apply_push(
-            SubZeroData(ice_maker_on=params["ice_maker_on"], fields=dict(params))
-        )
+        update = SubZeroData(fields=dict(params))
+        if "ice_maker_on" in params:
+            update.ice_maker_on = params["ice_maker_on"]
+        self._apply_push(update)
 
     def _apply_push(self, data: SubZeroData) -> None:
         """Merge an unsolicited notification into coordinator state."""

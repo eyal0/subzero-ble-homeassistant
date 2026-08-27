@@ -79,6 +79,7 @@ Not every model reports every field. Missing keys stay `unknown`.
 | Refrigerator Temperature | Fridge **setpoint** (°F), writable after pairing. Valid range is 34–42°F. |
 | Freezer Temperature | Freezer **setpoint** (°F), writable after pairing. Valid range is −5–5°F. |
 | Ice Maker | Off, Normal, Night Ice, or Max Ice. Writable after pairing. |
+| Mode | Normal, High Usage, Short Vacation, Long Vacation, or Sabbath. Writable after pairing. |
 | Start pairing | Shows the PIN on the appliance display (needs a configured PIN and a bonded link). |
 
 These temperature entities are **setpoints**, not measured cavity temperatures. The appliance firmware does not expose live fridge/freezer temps over BLE. Values on the wire are Fahrenheit integers. Changing °C/°F on the appliance display is a local preference and does not change the BLE numbers.
@@ -126,7 +127,7 @@ The protocol and many other fridge models are documented in [JonGilmore/esphome-
 - **One BLE client.** Phone app, ESPHome, and this integration cannot share the connection.
 - **Pairing is BlueZ-only.** Home Assistant Core on macOS or Windows will not run the passkey agent used here.
 - **Setpoint writes** need a PIN, a bonded link, and the encrypted control channel. The appliance may acknowledge a `set` and still not apply it on some models.
-- **Other mode toggles** (Sabbath, vacation, humidity, etc.) are read-only in this integration.
+- **Humidity and similar extras** are read-only in this integration.
 - Occasional GATT drops during a poll are common (idle timeout or another client). The integration reconnects on the next update.
 
 ## Troubleshooting
