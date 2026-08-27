@@ -21,6 +21,8 @@ class SubZeroSwitchEntityDescription(SwitchEntityDescription):
 
     property_key: str
     is_on_fn: Callable[[SubZeroData], bool | None]
+    on_value: object = True
+    off_value: object = False
 
 
 SWITCH_DESCRIPTIONS: tuple[SubZeroSwitchEntityDescription, ...] = (
@@ -30,6 +32,15 @@ SWITCH_DESCRIPTIONS: tuple[SubZeroSwitchEntityDescription, ...] = (
         icon="mdi:air-filter",
         property_key="air_filter_on",
         is_on_fn=lambda data: field_bool(data, "air_filter_on"),
+    ),
+    SubZeroSwitchEntityDescription(
+        key="night_mode",
+        name="Night Mode",
+        icon="mdi:weather-night",
+        property_key="night_mode",
+        on_value=1,
+        off_value=0,
+        is_on_fn=lambda data: field_bool(data, "night_mode"),
     ),
 )
 
@@ -78,12 +89,14 @@ class SubZeroSwitchEntity(
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Turn the appliance feature on."""
-        await self.coordinator.async_set_bool(
-            self.entity_description.property_key, True
+        await self.coordinator.async_set_value(
+            self.entity_description.property_key,
+            self.entity_description.on_value,
         )
 
     async def async_turn_off(self, **kwargs: object) -> None:
         """Turn the appliance feature off."""
-        await self.coordinator.async_set_bool(
-            self.entity_description.property_key, False
+        await self.coordinator.async_set_value(
+            self.entity_description.property_key,
+            self.entity_description.off_value,
         )

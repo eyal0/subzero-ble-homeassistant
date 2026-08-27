@@ -289,6 +289,10 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
 
     async def async_set_bool(self, key: str, value: bool) -> None:
         """Write a boolean appliance property on D5."""
+        await self.async_set_value(key, value)
+
+    async def async_set_value(self, key: str, value: object) -> None:
+        """Write one appliance property on D5 and merge it into state."""
         client = await self._async_ready_client(require_pin=True)
         try:
             await client.async_set_property(key, value)
