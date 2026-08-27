@@ -1,8 +1,9 @@
 """Sensor platform for Sub-Zero BLE."""
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -28,6 +29,8 @@ from .coordinator import (
     field_number,
     field_text,
     format_version,
+    notif_attributes,
+    notif_count,
     parse_uptime_seconds,
 )
 
@@ -37,6 +40,7 @@ class SubZeroSensorEntityDescription(SensorEntityDescription):
     """Describes Sub-Zero sensor entity."""
 
     value_fn: Callable[[SubZeroData], float | int | str | None]
+    attrs_fn: Callable[[SubZeroData], Mapping[str, Any]] | None = None
 
 
 # Writable fridge/freezer setpoints live on the number platform.
@@ -133,8 +137,11 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         key="notifs",
         name="Notifications",
         icon="mdi:bell-outline",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: field_text(data, "notifs"),
+        value_fn=notif_count,
+        attrs_fn=notif_attributes,
     ),
     SubZeroSensorEntityDescription(
         key="uptime",
@@ -202,6 +209,13 @@ class SubZeroSensorEntity(CoordinatorEntity[SubZeroDataUpdateCoordinator], Senso
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Return per-notification attributes when the description provides them."""
+        if self.entity_description.attrs_fn is None or self.coordinator.data is None:
+            return None
+        return self.entity_description.attrs_fn(self.coordinator.data)
 
 
 class SubZeroConnectionSensor(

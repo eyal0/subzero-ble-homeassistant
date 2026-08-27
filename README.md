@@ -111,7 +111,7 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 | Max Ice Start Time / End Time | Diagnostic text |
 | Service | Diagnostic (JSON if the appliance sends a dict) |
 | Active Faults | Diagnostic text of `active_faults` (empty when none) |
-| Notifications | Diagnostic JSON of `notifs` (empty when none) |
+| Notifications | Diagnostic count of the `notifs` log; each entry is `notif_<seq>` |
 | Uptime | Seconds since last power cycle (diagnostic) |
 | Firmware Version | e.g. `fw 2.27 / api 5.5` (diagnostic) |
 
@@ -128,7 +128,7 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 | Service Mode | Diagnostic |
 | Service Required | Problem-class diagnostic |
 | Active Faults | Problem-class diagnostic; on when `active_faults` is non-empty |
-| Notifications | Problem-class diagnostic; on when `notifs` is non-empty |
+| Notifications | Diagnostic; on when the `notifs` event log is non-empty |
 | Pairing Window | Diagnostic; on when the appliance BLE pairing window is open |
 
 ## Supported devices

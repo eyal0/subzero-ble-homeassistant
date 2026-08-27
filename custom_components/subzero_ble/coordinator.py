@@ -165,6 +165,35 @@ def field_text(data: SubZeroData, key: str) -> str | None:
     return str(value)
 
 
+def notif_count(data: SubZeroData) -> int | None:
+    """Return how many entries are in the appliance notification log."""
+    if "notifs" not in data.fields:
+        return None
+    value = data.fields["notifs"]
+    if value is None:
+        return 0
+    if isinstance(value, list):
+        return len(value)
+    return None
+
+
+def notif_attributes(data: SubZeroData) -> dict[str, Any]:
+    """Expose each notifs entry as notif_<seq> for entity attributes."""
+    value = data.fields.get("notifs")
+    if not isinstance(value, list):
+        return {}
+    attributes: dict[str, Any] = {}
+    for index, item in enumerate(value):
+        if isinstance(item, dict) and item.get("notif_seq") is not None:
+            seq = item["notif_seq"]
+            attributes[f"notif_{seq}"] = {
+                key: item[key] for key in ("notif_type", "timestamp") if key in item
+            }
+        else:
+            attributes[f"notif_{index}"] = item
+    return attributes
+
+
 def field_number(data: SubZeroData, key: str) -> float | int | None:
     """Return a numeric appliance field."""
     if key not in data.fields:
