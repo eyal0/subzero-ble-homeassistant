@@ -181,6 +181,37 @@ class PairingAgentSession:
         self._bus = None
 
 
+async def async_device_is_paired(
+    ble_device: BLEDevice, client: Any | None = None
+) -> bool:
+    """Return True if BlueZ already has a bond for this appliance."""
+    device_path = _device_path(ble_device)
+    if device_path is None:
+        return False
+    bus = bleak_message_bus(client)
+    owns_bus = False
+    if bus is None:
+        from dbus_fast import BusType
+        from dbus_fast.aio import MessageBus
+
+        bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        owns_bus = True
+    try:
+        introspection = await bus.introspect("org.bluez", device_path)
+        obj = bus.get_proxy_object("org.bluez", device_path, introspection)
+        device = obj.get_interface("org.bluez.Device1")
+        return bool(await device.get_paired())
+    except Exception:
+        _LOGGER.debug("Could not read BlueZ Paired for %s", device_path, exc_info=True)
+        return False
+    finally:
+        if owns_bus:
+            try:
+                bus.disconnect()
+            except Exception:
+                pass
+
+
 async def async_pair_with_passkey(
     ble_device: BLEDevice,
     pin: str,
@@ -188,17 +219,24 @@ async def async_pair_with_passkey(
     *,
     force: bool = False,
     session: PairingAgentSession | None = None,
-) -> None:
+) -> bool:
     """Bond using Legacy Pairing and the 6-digit PIN.
 
     Prefer Bleak's pair() so Pair() is issued on the same D-Bus connection as
     GATT. A separate bus is used only when the Bleak bus cannot be found.
+
+    Return True if a new SMP pairing completed (the ATT link should reconnect).
+    Return False if a bond already existed.
     """
     device_path = _device_path(ble_device)
     if device_path is None:
         raise SubZeroPairingError(
             "Cannot pair: BlueZ device path is unavailable on this adapter"
         )
+
+    if not force and await async_device_is_paired(ble_device, client):
+        _LOGGER.info("Bond already exists for %s", ble_device.address)
+        return False
 
     created_session = session is None
     if session is None:
@@ -228,7 +266,7 @@ async def async_pair_with_passkey(
         message = str(err)
         if "AlreadyExists" in message or "already" in message.lower():
             _LOGGER.info("Bond already exists for %s", ble_device.address)
-            return
+            return False
         raise SubZeroPairingError(f"BLE pairing failed: {err}") from err
     finally:
         # A caller-owned session stays registered on the GATT bus. A dedicated
@@ -237,6 +275,7 @@ async def async_pair_with_passkey(
             await session.stop()
 
     _LOGGER.info("BLE pairing completed for %s", ble_device.address)
+    return True
 
 
 async def _pair_via_device_interface(bus: Any, device_path: str) -> None:

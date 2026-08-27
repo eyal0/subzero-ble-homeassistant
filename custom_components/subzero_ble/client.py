@@ -22,6 +22,7 @@ from .const import (
     CONNECTION_PAIRED,
     GET_ASYNC_COMMAND,
     GET_COMMAND,
+    LINK_SETTLE_SECONDS,
     MAX_FRAME_BYTES,
     POLL_TIMEOUT,
     SET_WRITE_GAP_SECONDS,
@@ -34,6 +35,7 @@ from .const import (
 from .pairing import (
     PairingAgentSession,
     SubZeroPairingError,
+    async_device_is_paired,
     async_pair_with_passkey,
     bleak_message_bus,
 )
@@ -107,15 +109,30 @@ class SubZeroBleClient:
             return CONNECTION_DIAGNOSTIC
         return CONNECTION_CONNECTED
 
-    def _disconnected(self, _client: BleakClientWithServiceCache) -> None:
+    def _disconnected(self, client: BleakClientWithServiceCache) -> None:
         """Handle an unexpected disconnect from the appliance."""
+        # Pair() is followed by a reconnect so ATT uses the bond. The first
+        # client's callback can fire after the second client is already live.
+        if client is not self._client:
+            _BLE_LOG.debug(
+                "Ignoring disconnect from a replaced GATT client for %s",
+                self._ble_device.address,
+            )
+            return
         self._poll_channel = None
         self._subscribed.clear()
         self._unlocked = False
         self._buffers.clear()
-        self._pairing = None
         if self._closing:
             return
+        pairing = self._pairing
+        self._pairing = None
+        self._client = None
+        if pairing is not None:
+            try:
+                asyncio.get_running_loop().create_task(pairing.stop())
+            except RuntimeError:
+                pass
         _LOGGER.warning(
             "Disconnected from Sub-Zero %s (%s)",
             self._ble_device.name,
@@ -385,10 +402,11 @@ class SubZeroBleClient:
             getattr(self._client, "mtu_size", None),
             getattr(self._ble_device, "rssi", None),
         )
+        await asyncio.sleep(LINK_SETTLE_SECONDS)
         if self._pin:
             try:
-                await self._ensure_paired()
-                if encrypt_reconnect:
+                newly_paired = await self._ensure_paired()
+                if newly_paired and encrypt_reconnect:
                     _LOGGER.info(
                         "Reconnecting so the GATT link uses the BLE bond"
                     )
@@ -405,14 +423,20 @@ class SubZeroBleClient:
 
         await self._subscribe_and_unlock()
 
-    async def _ensure_paired(self) -> None:
-        """Register a KeyboardOnly agent on the GATT bus and Pair()."""
+    async def _ensure_paired(self) -> bool:
+        """Pair if needed. Return True when a new SMP pairing completed."""
         assert self._client is not None
         assert self._pin is not None
+        if await async_device_is_paired(self._ble_device, self._client):
+            _LOGGER.info(
+                "Already bonded with %s; skipping Pair()",
+                self._ble_device.address,
+            )
+            return False
         if self._pairing is None:
             self._pairing = PairingAgentSession(self._pin)
             await self._pairing.start(bleak_message_bus(self._client))
-        await async_pair_with_passkey(
+        return await async_pair_with_passkey(
             self._ble_device,
             self._pin,
             client=self._client,
@@ -673,6 +697,8 @@ def _is_link_drop(err: BaseException) -> bool:
             "disconnected",
             "not connected",
             "connection lost",
+            "unlikely error",
+            "gatt protocol error",
         )
     )
 
