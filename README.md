@@ -188,12 +188,11 @@ To make an icon: export a 256×256 PNG (and 512×512 `@2x`) from Figma, Inkscape
 
 ## HACS default store (optional)
 
-Anyone can install this today as a custom repository. Listing it in the default HACS store is a separate PR to [hacs/default](https://github.com/hacs/default) (`integration` file, alphabetical). Before that PR, HACS expects:
+Anyone can install this today as a custom repository. Listing it in the default HACS store is a separate PR to [hacs/default](https://github.com/hacs/default) (`integration` file, alphabetical).
 
-- Public GitHub repo with a **description**, **topics**, issues enabled, and at least one **GitHub release** (not only a tag)
-- Passing [HACS Action](https://github.com/hacs/action) and [hassfest](https://github.com/home-assistant/actions) workflows
-- `hacs.json` at the repo root with a `name` (already present)
-- `custom_components/subzero_ble/brand/icon.png`
+hassfest and the HACS Action run on every push, pull request, nightly, and via **Actions → Validate → Run workflow**. Both must pass **without ignored checks**. After a green run, publish a GitHub **release** (not only a tag), then open the `hacs/default` PR.
+
+Also required on the GitHub repo itself: a **description**, **topics**, issues enabled, and an OSI-approved **license** GitHub can detect (the tracked `LICENSE` file is currently empty). Brand assets are already at `custom_components/subzero_ble/brand/icon.png`.
 
 See [Include default repositories](https://hacs.xyz/docs/publish/include/). Reviews there often take a long time; custom-repository install does not wait on that.
 
