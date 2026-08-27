@@ -5,6 +5,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from bleak.backends.device import BLEDevice
 from bleak.exc import BleakError
@@ -45,8 +46,11 @@ async def _passkey_agent(pin: str) -> AsyncIterator[Any]:
             super().__init__("org.bluez.Agent1")
             self._pin = pin
 
+        # dbus-fast requires D-Bus signature strings. Do not use `-> None`:
+        # with PEP 563 that becomes the string "None", which dbus-fast evals
+        # to None and Cython then rejects as a signature.
         @method()
-        def Release(self) -> None:
+        def Release(self) -> "":
             return None
 
         @method()
@@ -60,29 +64,30 @@ async def _passkey_agent(pin: str) -> AsyncIterator[Any]:
             return int(self._pin)
 
         @method()
-        def DisplayPasskey(self, device: "o", passkey: "u", entered: "q") -> None:  # noqa: F821
-            _LOGGER.debug("BlueZ DisplayPasskey %s entered=%s", passkey, entered)
+        def DisplayPasskey(self, device: "o", passkey: "u", entered: "q") -> "":  # noqa: F821
+            _LOGGER.info("BlueZ DisplayPasskey %06d entered=%s", int(passkey), entered)
 
         @method()
-        def DisplayPinCode(self, device: "o", pincode: "s") -> None:  # noqa: F821
-            _LOGGER.debug("BlueZ DisplayPinCode")
+        def DisplayPinCode(self, device: "o", pincode: "s") -> "":  # noqa: F821
+            _LOGGER.info("BlueZ DisplayPinCode")
 
         @method()
-        def RequestConfirmation(self, device: "o", passkey: "u") -> None:  # noqa: F821
+        def RequestConfirmation(self, device: "o", passkey: "u") -> "":  # noqa: F821
             shown = f"{int(passkey):06d}"
+            _LOGGER.info("BlueZ RequestConfirmation passkey=%s", shown)
             if shown != self._pin:
                 raise DBusError("org.bluez.Error.Rejected", "Passkey mismatch")
 
         @method()
-        def RequestAuthorization(self, device: "o") -> None:  # noqa: F821
+        def RequestAuthorization(self, device: "o") -> "":  # noqa: F821
             return None
 
         @method()
-        def AuthorizeService(self, device: "o", uuid: "s") -> None:  # noqa: F821
+        def AuthorizeService(self, device: "o", uuid: "s") -> "":  # noqa: F821
             return None
 
         @method()
-        def Cancel(self) -> None:
+        def Cancel(self) -> "":
             return None
 
     bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
