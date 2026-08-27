@@ -200,7 +200,7 @@ Anyone can install this today as a custom repository. Listing it in the default 
 
 hassfest and the HACS Action run on every push, pull request, nightly, and via **Actions → Validate → Run workflow**. Both must pass **without ignored checks**. After a green run, push a `vX.Y.Z` tag (or use **Actions → Release**) so a GitHub **release** is created, then open the `hacs/default` PR.
 
-Also required on the GitHub repo itself: a **description**, **topics**, issues enabled, and an OSI-approved **license** GitHub can detect (the tracked `LICENSE` file is currently empty). Brand assets are already at `custom_components/subzero_ble/brand/icon.png`.
+Also required on the GitHub repo itself: a **description**, **topics**, and issues enabled. The repo uses the MIT license (`LICENSE`). Brand assets are already at `custom_components/subzero_ble/brand/icon.png`.
 
 See [Include default repositories](https://hacs.xyz/docs/publish/include/). Reviews there often take a long time; custom-repository install does not wait on that.
 
@@ -210,4 +210,4 @@ BLE protocol details come from [JonGilmore/esphome-subzero-ble](https://github.c
 
 ## License
 
-Use at your own risk. Not affiliated with Sub-Zero Group, Inc.
+[MIT](LICENSE). Use at your own risk. Not affiliated with Sub-Zero Group, Inc.
