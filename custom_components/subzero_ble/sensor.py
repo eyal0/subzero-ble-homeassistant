@@ -26,6 +26,8 @@ from .const import CONNECTION_STATUSES, DOMAIN
 from .coordinator import (
     SubZeroData,
     SubZeroDataUpdateCoordinator,
+    build_info_attributes,
+    build_info_desc,
     field_number,
     field_text,
     format_version,
@@ -92,7 +94,8 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         name="Build Info",
         icon="mdi:code-braces",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: field_text(data, "build_info"),
+        value_fn=build_info_desc,
+        attrs_fn=build_info_attributes,
     ),
     SubZeroSensorEntityDescription(
         key="door_ajar_timeout",

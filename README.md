@@ -106,7 +106,7 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 | Appliance Name | Diagnostic |
 | Appliance Serial | Diagnostic |
 | Appliance Type | Diagnostic |
-| Build Info | Diagnostic |
+| Build Info | Diagnostic; state is `desc`, other keys are attributes |
 | Door Ajar Alarm Timeout | Minutes (diagnostic) |
 | Max Ice Start Time / End Time | Diagnostic text |
 | Service | Diagnostic (JSON if the appliance sends a dict) |

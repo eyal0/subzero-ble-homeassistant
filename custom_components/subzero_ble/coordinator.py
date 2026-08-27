@@ -194,6 +194,29 @@ def notif_attributes(data: SubZeroData) -> dict[str, Any]:
     return attributes
 
 
+def build_info_desc(data: SubZeroData) -> str | None:
+    """Return build_info.desc as the Build Info sensor state."""
+    if "build_info" not in data.fields:
+        return None
+    value = data.fields["build_info"]
+    if isinstance(value, dict):
+        desc = value.get("desc")
+        if desc is None:
+            return None
+        return str(desc)
+    if value is None:
+        return None
+    return str(value)
+
+
+def build_info_attributes(data: SubZeroData) -> dict[str, Any]:
+    """Expose build_info keys other than desc as entity attributes."""
+    value = data.fields.get("build_info")
+    if not isinstance(value, dict):
+        return {}
+    return {key: item for key, item in value.items() if key != "desc"}
+
+
 def field_number(data: SubZeroData, key: str) -> float | int | None:
     """Return a numeric appliance field."""
     if key not in data.fields:
