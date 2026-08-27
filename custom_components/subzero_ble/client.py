@@ -23,6 +23,7 @@ from .const import (
     SUBSCRIBE_TIMEOUT,
     UNLOCK_TIMEOUT,
     display_pin_command,
+    set_command,
     unlock_command,
 )
 from .pairing import (
@@ -239,6 +240,50 @@ class SubZeroBleClient:
             channel, display_pin_command(duration), timeout=UNLOCK_TIMEOUT
         )
         _LOGGER.info("display_pin sent; the appliance should show the PIN")
+
+    async def async_set_property(self, key: str, value: object) -> None:
+        """Write one property on the encrypted D5 control channel."""
+        if not self._pin:
+            raise BleakError(
+                "Enter the 6-digit PIN under Configure first. "
+                "Setpoint writes use encrypted channel D5."
+            )
+        async with self._lock:
+            await self._ensure_connected(require_pair=True)
+            await self._write_set(key, value)
+
+    async def _write_set(self, key: str, value: object) -> None:
+        """Send `set` on D5 and wait for an ack."""
+        assert self._client is not None
+        channel = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
+        if channel is None:
+            raise BleakError(
+                "D5 is not available. Pairing may not have completed — "
+                "check the PIN and watch the appliance display."
+            )
+        await self._subscribe_optional(channel)
+        if str(channel.uuid).lower() not in self._subscribed:
+            raise BleakError(
+                "Could not subscribe to D5. The adapter is not bonded yet."
+            )
+        if not self._unlocked:
+            d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
+            await self._unlock_channels(channel, d6)
+        _LOGGER.info("Setting %s=%s on D5", key, value)
+        raw = await self._write_and_wait(
+            channel, set_command(key, value), timeout=UNLOCK_TIMEOUT
+        )
+        payload = _loads_json(raw)
+        status = None if payload is None else payload.get("status")
+        if status == 302:
+            raise SubZeroInvalidPin(
+                "Appliance rejected PIN (status 302). "
+                "The code may have rotated — check the display."
+            )
+        if status not in (0, None):
+            raise BleakError(
+                f"Appliance rejected set {key}={value} (status {status})"
+            )
 
     async def async_disconnect(self) -> None:
         """Drop the BLE connection if it is still open."""

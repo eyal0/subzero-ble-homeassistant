@@ -70,3 +70,14 @@ def display_pin_command(duration: int = 30) -> bytes:
         )
         + "\n"
     ).encode()
+
+
+def set_command(key: str, value: object) -> bytes:
+    """Build a D5 set command for a single appliance property."""
+    return (
+        json.dumps(
+            {"cmd": "set", "params": {key: value}},
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode()

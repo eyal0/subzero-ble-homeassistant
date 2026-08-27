@@ -166,8 +166,8 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         """Return the configured pairing PIN, if any."""
         return self.entry.data.get(CONF_PIN) or self.entry.options.get(CONF_PIN)
 
-    async def async_display_pin(self) -> None:
-        """Pair if needed, then ask the appliance to show its PIN on the display."""
+    async def _async_ready_client(self, *, require_pin: bool = False) -> SubZeroBleClient:
+        """Return a BLE client, creating it if needed."""
         ble_device = bluetooth.async_ble_device_from_address(
             self.hass, self.address, connectable=True
         )
@@ -176,11 +176,10 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
                 f"Sub-Zero appliance {self.address} is not currently in range"
             )
         pin = self._pin()
-        if not pin:
+        if require_pin and not pin:
             raise HomeAssistantError(
                 "Enter the 6-digit PIN under Configure first. "
-                "Start pairing uses encrypted channel D5; without a PIN the "
-                "adapter cannot bond. Watch the fridge display during pairing."
+                "Writes use encrypted channel D5."
             )
         if self.client is None:
             self.client = SubZeroBleClient(
@@ -190,10 +189,31 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             self.client.update_ble_device(ble_device)
             if self.client.update_pin(pin):
                 await self.client.async_disconnect()
+        return self.client
+
+    async def async_display_pin(self) -> None:
+        """Pair if needed, then ask the appliance to show its PIN on the display."""
+        client = await self._async_ready_client(require_pin=True)
         try:
-            await self.client.async_display_pin()
+            await client.async_display_pin()
         except Exception as err:
             raise HomeAssistantError(str(err)) from err
+
+    async def async_set_temperature(self, property_key: str, value: float) -> None:
+        """Write a fridge or freezer setpoint on D5."""
+        wire = int(round(value))
+        client = await self._async_ready_client(require_pin=True)
+        try:
+            await client.async_set_property(property_key, wire)
+        except Exception as err:
+            raise HomeAssistantError(str(err)) from err
+        if property_key == "ref_set_temp":
+            update = SubZeroData(fridge_temp=float(wire), fields={property_key: wire})
+        elif property_key == "frz_set_temp":
+            update = SubZeroData(freezer_temp=float(wire), fields={property_key: wire})
+        else:
+            update = SubZeroData(fields={property_key: wire})
+        self._apply_push(update)
 
     def _apply_push(self, data: SubZeroData) -> None:
         """Merge an unsolicited notification into coordinator state."""
