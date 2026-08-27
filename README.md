@@ -113,10 +113,10 @@ These temperature entities are **setpoints**, not measured cavity temperatures. 
 | --- | --- |
 | Refrigerator Door | Open / closed |
 | Freezer Door | Open / closed |
-| Ice Maker | Diagnostic |
-| Max Ice Mode | Diagnostic |
-| Night Ice Mode | Diagnostic |
-| Sabbath Mode | Diagnostic |
+| Ice Maker | Diagnostic; disabled by default (use the Ice Maker select) |
+| Max Ice Mode | Diagnostic; disabled by default (use the Ice Maker select) |
+| Night Ice Mode | Diagnostic; disabled by default (use the Ice Maker select) |
+| Sabbath Mode | Diagnostic; disabled by default (use the Mode select) |
 | Service Mode | Diagnostic |
 | Service Required | Problem-class diagnostic |
 | Active Faults | Problem-class diagnostic; on when `active_faults` is non-empty |

@@ -50,6 +50,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SubZeroBinarySensorEntityDescription, ...] = (
         name="Ice Maker",
         icon="mdi:snowflake",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         is_on_fn=lambda data: field_bool(data, "ice_maker_on"),
     ),
     SubZeroBinarySensorEntityDescription(
@@ -57,6 +58,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SubZeroBinarySensorEntityDescription, ...] = (
         name="Max Ice Mode",
         icon="mdi:snowflake-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         is_on_fn=lambda data: field_bool(data, "max_ice_on"),
     ),
     SubZeroBinarySensorEntityDescription(
@@ -64,6 +66,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SubZeroBinarySensorEntityDescription, ...] = (
         name="Night Ice Mode",
         icon="mdi:weather-night",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         is_on_fn=lambda data: field_bool(data, "night_ice_on"),
     ),
     SubZeroBinarySensorEntityDescription(
@@ -71,6 +74,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SubZeroBinarySensorEntityDescription, ...] = (
         name="Sabbath Mode",
         icon="mdi:star-david",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         is_on_fn=lambda data: field_bool(data, "sabbath_on"),
     ),
     SubZeroBinarySensorEntityDescription(
