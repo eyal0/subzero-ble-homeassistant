@@ -36,7 +36,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             hass,
             _LOGGER,
             name=entry.title,
-            update_interval=timedelta(seconds=30),
+            update_interval=timedelta(seconds=60),
         )
         self.entry = entry
         self.address = entry.data[CONF_ADDRESS]

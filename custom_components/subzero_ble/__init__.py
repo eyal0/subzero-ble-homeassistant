@@ -10,7 +10,6 @@ from .coordinator import SubZeroDataUpdateCoordinator
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
-    Platform.SWITCH,
 ]
 
 type SubZeroConfigEntry = ConfigEntry[SubZeroDataUpdateCoordinator]
