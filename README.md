@@ -54,6 +54,16 @@ That bumps the manifest, commits, tags `vX.Y.Z`, and pushes to `eyal0`. The tag 
 
 Copy `custom_components/subzero_ble` into `<config>/custom_components/subzero_ble` and restart Home Assistant.
 
+## Removing the integration
+
+This integration follows standard Home Assistant removal. There is nothing extra to uninstall.
+
+1. Go to **Settings** → **Devices & services**.
+2. Select the Sub-Zero Refrigerator (BLE) entry.
+3. Open the three-dot menu next to the entry and choose **Delete**.
+
+That unloads entities and disconnects Bluetooth. A BlueZ bond on the host adapter is not removed automatically; forget the appliance in the OS Bluetooth settings if you need a clean re-pair.
+
 ## Setup
 
 1. Add the integration (HACS my-link above, or **Settings** → **Devices & services** → **Add integration**).
