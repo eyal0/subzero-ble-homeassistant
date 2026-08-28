@@ -5,6 +5,10 @@ alwaysApply: true
 
 # Pull requests
 
-Follow `AGENTS.md`. Do not commit, push, or merge to `main`. Finish every change with a pull request and leave it open for review.
+Follow `AGENTS.md`.
 
-The GitHub PR branch name must match the local branch name. After the remote branch exists, `git fetch` and `git branch --set-upstream-to=eyal0/<branch>`. If the cloud agent rewrote the commit, `git reset --hard @{u}` so `git pull` and `git push` work. Do not let a cloud agent publish a different `cursor/…` branch for the same change.
+Do not commit, push, or merge to `main`. Finish every change with a pull request from **this checkout**: commit, `git push`, `gh pr create`. Leave the PR open for review.
+
+Do not spawn a Cursor cloud agent to re-commit the same change and open the PR. If `git push` or `gh` fails here, give the user the commands to run locally.
+
+The GitHub PR branch name must match the local branch name (`git push` with `push.autosetupremote` does that).
