@@ -1,0 +1,11 @@
+{
+  "name": "subzero-ble-homeassistant",
+  "install": "bash scripts/setup-dev-env.sh",
+  "terminals": [
+    {
+      "name": "homeassistant",
+      "command": "source \"$HOME/ha-venv/bin/activate\" && exec hass -c \"$HOME/ha-config\""
+    }
+  ],
+  "ports": [8123]
+}
