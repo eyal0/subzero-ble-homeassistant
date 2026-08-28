@@ -96,9 +96,13 @@ if [ ! -f "$HA_CONFIG/configuration.yaml" ]; then
 # Minimal Home Assistant config for developing the subzero_ble integration.
 #
 # default_config is intentionally omitted: it loads many unrelated integrations.
-# The web UI (frontend) is enabled so the integration can be added and exercised
-# from the browser, and debug logging is turned on for the integration.
+# - frontend  : web UI, so the integration can be added/exercised from a browser
+# - bluetooth : the stack this integration is built on; it is also required for
+#               the config flow's discovery step (sets up fine with no adapter)
+# - logger    : debug logging for the integration
 frontend:
+
+bluetooth:
 
 logger:
   default: warning
