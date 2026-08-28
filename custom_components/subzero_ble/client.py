@@ -65,7 +65,18 @@ class SubZeroCharacteristicMissing(BleakError):
 
 
 class SubZeroInvalidPin(BleakError):
-    """Raised when the appliance rejects unlock_channel (status 302)."""
+    """Raised when the appliance rejects unlock_channel (status 3 or 302)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        lockout_seconds: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.lockout_seconds = lockout_seconds
 
 
 class SubZeroBleClient:
@@ -389,16 +400,31 @@ class SubZeroBleClient:
             channel, set_command(key, value), timeout=UNLOCK_TIMEOUT
         )
         payload = _loads_json(raw)
+        if rejected := _invalid_pin_from_payload(payload):
+            raise rejected
         status = None if payload is None else payload.get("status")
-        if status == 302:
-            raise SubZeroInvalidPin(
-                "Appliance rejected PIN (status 302). "
-                "The code may have rotated — check the display."
-            )
         if status not in (0, None):
             raise BleakError(
                 f"Appliance rejected set {key}={value} (status {status})"
             )
+
+    async def async_verify_pin(self) -> None:
+        """Pair and unlock with the configured PIN, then disconnect.
+
+        Raises SubZeroInvalidPin or SubZeroPairingError if the appliance
+        rejects the code. Disconnects afterwards so the single BLE slot is free.
+        """
+        if not self._pin:
+            raise BleakError("PIN is required to verify pairing")
+        async with self._lock:
+            try:
+                await self._connect_and_setup(require_pair=True)
+                if not self._unlocked:
+                    raise SubZeroInvalidPin(
+                        "Appliance rejected PIN. Check the code on the display."
+                    )
+            finally:
+                await self._disconnect_unlocked()
 
     async def async_disconnect(self) -> None:
         """Drop the BLE connection if it is still open."""
@@ -544,26 +570,33 @@ class SubZeroBleClient:
             await self._subscribe(d7)
 
         if self._pin:
-            await self._subscribe_encrypted_channels(d5, d6)
-            if not self._has_encrypted_subscription(d5, d6):
-                _LOGGER.info(
-                    "D5/D6 need an encrypted ATT link; encrypting the existing bond"
-                )
-                await self._encrypt_existing_bond()
-                d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
-                d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
+            try:
                 await self._subscribe_encrypted_channels(d5, d6)
-            if d6 is not None and str(d6.uuid).lower() in self._subscribed:
-                self._poll_channel = d6
-                _LOGGER.info("Using D6 for full-state polling after unlock")
-            elif d7 is not None:
+                if not self._has_encrypted_subscription(d5, d6):
+                    _LOGGER.info(
+                        "D5/D6 need an encrypted ATT link; encrypting the existing bond"
+                    )
+                    await self._encrypt_existing_bond()
+                    d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
+                    d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
+                    await self._subscribe_encrypted_channels(d5, d6)
+            except SubZeroInvalidPin as err:
+                _LOGGER.warning("%s", err)
+                if d7 is None:
+                    raise
                 self._poll_channel = d7
-                _LOGGER.warning(
-                    "Unlock attempted; falling back to D7 polling. "
-                    "D5/D6 still require encryption — the BlueZ bond may be stale."
-                )
             else:
-                self._poll_channel = _select_poll_channel(self._client)
+                if d6 is not None and str(d6.uuid).lower() in self._subscribed:
+                    self._poll_channel = d6
+                    _LOGGER.info("Using D6 for full-state polling after unlock")
+                elif d7 is not None:
+                    self._poll_channel = d7
+                    _LOGGER.warning(
+                        "Unlock attempted; falling back to D7 polling. "
+                        "D5/D6 still require encryption — the BlueZ bond may be stale."
+                    )
+                else:
+                    self._poll_channel = _select_poll_channel(self._client)
         else:
             self._poll_channel = d7 or _select_poll_channel(self._client)
             if d6 is not None:
@@ -641,12 +674,9 @@ class SubZeroBleClient:
                     continue
                 raise
             payload = _loads_json(raw)
+            if rejected := _invalid_pin_from_payload(payload):
+                raise rejected
             status = None if payload is None else payload.get("status")
-            if status == 302:
-                raise SubZeroInvalidPin(
-                    "Appliance rejected PIN (status 302). "
-                    "The code may have rotated — check the display."
-                )
             if status not in (0, None):
                 _LOGGER.warning(
                     "unlock_channel on %s returned status %s", name, status
@@ -829,6 +859,37 @@ def _is_link_drop(err: BaseException) -> bool:
             "unlikely error",
             "gatt protocol error",
         )
+    )
+
+
+def _invalid_pin_from_payload(
+    payload: dict[str, Any] | None,
+) -> SubZeroInvalidPin | None:
+    """Return an error if unlock/set JSON says the PIN was rejected."""
+    if payload is None:
+        return None
+    status = payload.get("status")
+    lockout: int | None = None
+    resp = payload.get("resp")
+    if isinstance(resp, dict) and resp.get("lockout_duration") is not None:
+        try:
+            lockout = int(resp["lockout_duration"])
+        except (TypeError, ValueError):
+            lockout = None
+    if status not in (3, 302) and lockout is None:
+        return None
+    status_int = status if isinstance(status, int) else None
+    if lockout:
+        return SubZeroInvalidPin(
+            f"Appliance rejected PIN (status {status}). "
+            f"Wait {lockout} seconds before trying again.",
+            status=status_int,
+            lockout_seconds=lockout,
+        )
+    return SubZeroInvalidPin(
+        f"Appliance rejected PIN (status {status}). "
+        "Check the code on the display.",
+        status=status_int,
     )
 
 

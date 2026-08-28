@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 import voluptuous as vol
+from bleak.exc import BleakError
 
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
@@ -23,8 +24,9 @@ from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
-from .client import SubZeroBleClient
+from .client import SubZeroBleClient, SubZeroInvalidPin
 from .const import CONF_PIN, DOMAIN, LOCAL_NAME_PREFIX, normalize_pin
+from .pairing import SubZeroPairingError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +87,29 @@ async def _async_start_standalone_display_pin(
         _run(), name=f"{DOMAIN} display_pin {address}"
     )
     return task, client
+
+
+async def _async_verify_pin(hass: HomeAssistant, address: str, pin: str) -> None:
+    """Connect, pair, and unlock. Raise if the appliance rejects the PIN."""
+    ble_device = bluetooth.async_ble_device_from_address(
+        hass, address, connectable=True
+    )
+    if ble_device is None:
+        raise BleakError(f"Appliance {address} is not currently in range")
+    client = SubZeroBleClient(ble_device, pin=pin)
+    try:
+        await client.async_verify_pin()
+    finally:
+        await client.async_disconnect()
+
+
+def _pin_verify_error(err: BaseException) -> str:
+    """Map a verify failure to a config-flow error key. Do not log the PIN."""
+    if isinstance(err, (SubZeroInvalidPin, SubZeroPairingError)):
+        _LOGGER.warning("Appliance rejected PIN: %s", err)
+        return "pin_rejected"
+    _LOGGER.warning("Could not verify PIN: %s", err)
+    return "cannot_connect"
 
 
 async def _async_cancel_task(task: asyncio.Task[None] | None) -> None:
@@ -239,13 +264,27 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 assert self._address is not None
                 await self._async_stop_display_pin()
-                data: dict[str, Any] = {CONF_ADDRESS: self._address}
                 if pin:
-                    data[CONF_PIN] = pin
-                return self.async_create_entry(
-                    title=self._name or self._address,
-                    data=data,
-                )
+                    try:
+                        await _async_verify_pin(self.hass, self._address, pin)
+                    except (
+                        SubZeroInvalidPin,
+                        SubZeroPairingError,
+                        BleakError,
+                        TimeoutError,
+                        OSError,
+                    ) as err:
+                        errors["base"] = _pin_verify_error(err)
+                    else:
+                        return self.async_create_entry(
+                            title=self._name or self._address,
+                            data={CONF_ADDRESS: self._address, CONF_PIN: pin},
+                        )
+                else:
+                    return self.async_create_entry(
+                        title=self._name or self._address,
+                        data={CONF_ADDRESS: self._address},
+                    )
 
         await self._async_ensure_display_pin()
         return self.async_show_form(
@@ -296,6 +335,16 @@ class SubZeroOptionsFlow(OptionsFlow):
         if client is not None:
             await client.async_disconnect()
 
+    async def _async_pause_runtime(self) -> tuple[Any, Any]:
+        """Stop polling and drop BLE so PIN verify can use the only connection."""
+        coordinator = getattr(self._config_entry, "runtime_data", None)
+        if coordinator is None:
+            return None, None
+        interval = coordinator.update_interval
+        coordinator.update_interval = None
+        await coordinator.async_disconnect()
+        return coordinator, interval
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -308,15 +357,34 @@ class SubZeroOptionsFlow(OptionsFlow):
                 errors[CONF_PIN] = "invalid_pin"
             else:
                 await self._async_stop_display_pin()
-                data = {**self._config_entry.data}
-                if pin:
-                    data[CONF_PIN] = pin
+                coordinator, saved_interval = await self._async_pause_runtime()
+                try:
+                    if pin:
+                        await _async_verify_pin(
+                            self.hass,
+                            self._config_entry.data[CONF_ADDRESS],
+                            pin,
+                        )
+                except (
+                    SubZeroInvalidPin,
+                    SubZeroPairingError,
+                    BleakError,
+                    TimeoutError,
+                    OSError,
+                ) as err:
+                    errors["base"] = _pin_verify_error(err)
+                    if coordinator is not None:
+                        coordinator.update_interval = saved_interval
                 else:
-                    data.pop(CONF_PIN, None)
-                self.hass.config_entries.async_update_entry(
-                    self._config_entry, data=data
-                )
-                return self.async_create_entry(title="", data={})
+                    data = {**self._config_entry.data}
+                    if pin:
+                        data[CONF_PIN] = pin
+                    else:
+                        data.pop(CONF_PIN, None)
+                    self.hass.config_entries.async_update_entry(
+                        self._config_entry, data=data
+                    )
+                    return self.async_create_entry(title="", data={})
 
         await self._async_ensure_display_pin()
         return self.async_show_form(

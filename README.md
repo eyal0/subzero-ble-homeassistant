@@ -69,12 +69,12 @@ Without a PIN the integration uses the unauthenticated diagnostic channel. Refri
 The same 6-digit code is used for BLE bonding (the passkey shown on the appliance) and for the protocol `unlock_channel` command.
 
 1. Copy the PIN from the **Sub-Zero Group Owner** app, or watch the appliance display during pairing.
-2. Enter that PIN during setup, or later under **Configure**.
+2. Enter that PIN during setup, or later under **Configure**. Setup does not finish until the appliance accepts `unlock_channel` on the encrypted channels. A wrong PIN stays on the form; it is not saved.
 3. The integration bonds with BlueZ (Keyboard Only I/O), reconnects so the GATT link is encrypted, then unlocks the control and data channels.
 
-**Show PIN** writes `display_pin` on every visible channel (D4–D8), including encrypted ones, without unlocking first. A round succeeds when any channel returns `status: 0`. If none accept (typically because a door is closed), it retries every 3 seconds for up to 2 minutes.
+**Show PIN** writes `display_pin` on D5. A round succeeds when D5 returns `status: 0`. If the write is rejected (typically because a door is closed), it retries every 3 seconds for up to 2 minutes.
 
-If the official app re-pairs the appliance, the PIN often rotates. Status **302** in the logs means enter the new PIN under **Configure**.
+If the official app re-pairs the appliance, the PIN often rotates. Status **3** or **302** means the code was rejected — enter the new PIN under **Configure**.
 
 ## Entities
 

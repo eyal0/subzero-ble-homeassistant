@@ -7,7 +7,9 @@
       "not_supported": "Device not supported"
     },
     "error": {
-      "invalid_pin": "PIN must be exactly 6 digits"
+      "cannot_connect": "Could not reach the appliance to check the PIN. Make sure it is nearby and Bluetooth is on, then try again.",
+      "invalid_pin": "PIN must be exactly 6 digits",
+      "pin_rejected": "The appliance rejected this PIN. Check the code on the display and try again."
     },
     "flow_title": "{name}",
     "step": {
@@ -31,7 +33,9 @@
   },
   "options": {
     "error": {
-      "invalid_pin": "PIN must be exactly 6 digits"
+      "cannot_connect": "Could not reach the appliance to check the PIN. Make sure it is nearby and Bluetooth is on, then try again.",
+      "invalid_pin": "PIN must be exactly 6 digits",
+      "pin_rejected": "The appliance rejected this PIN. Check the code on the display and try again."
     },
     "step": {
       "init": {
