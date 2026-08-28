@@ -798,10 +798,6 @@ class SubZeroBleClient:
             parsed.freezer_temp,
             sorted(fields),
         )
-        if parsed.fridge_door_open is None and parsed.freezer_door_open is None:
-            _LOGGER.info(
-                "Door state was not in this payload. Raw JSON: %s", printable
-            )
         return parsed
 
 
