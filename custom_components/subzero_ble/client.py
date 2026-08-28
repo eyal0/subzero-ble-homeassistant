@@ -247,7 +247,7 @@ class SubZeroBleClient:
                 await self._write_display_pin(duration)
 
     async def _write_display_pin(self, duration: int) -> None:
-        """Write display_pin on D5. Requires an encrypted, paired link."""
+        """Write display_pin on D5. Requires an encrypted, unlocked link."""
         assert self._client is not None
         channel = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
         if channel is None:
@@ -260,10 +260,30 @@ class SubZeroBleClient:
             raise BleakError(
                 "Could not subscribe to D5. The adapter is not bonded yet."
             )
-        await self._write_and_wait(
+        if not self._unlocked:
+            d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
+            await self._unlock_channels(channel, d6)
+        if not self._unlocked:
+            raise BleakError(
+                "Could not unlock D5. Show PIN needs a bonded, unlocked "
+                "control channel."
+            )
+        _LOGGER.info("Sending display_pin on D5 for %s seconds", duration)
+        raw = await self._write_and_wait(
             channel, display_pin_command(duration), timeout=UNLOCK_TIMEOUT
         )
-        _LOGGER.info("display_pin sent; the appliance should show the PIN")
+        payload = _loads_json(raw)
+        status = None if payload is None else payload.get("status")
+        if status == 302:
+            raise SubZeroInvalidPin(
+                "Appliance rejected PIN (status 302). "
+                "The code may have rotated — check the display."
+            )
+        if status not in (0, None):
+            raise BleakError(
+                f"Appliance rejected display_pin (status {status})"
+            )
+        _LOGGER.info("display_pin sent; watch the appliance display for 30 seconds")
 
     async def async_set_property(self, key: str, value: object) -> None:
         """Write one property on the encrypted D5 control channel."""

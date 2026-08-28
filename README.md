@@ -72,7 +72,7 @@ The same 6-digit code is used for BLE bonding (the passkey shown on the applianc
 2. Enter that PIN during setup, or later under **Configure**.
 3. The integration bonds with BlueZ (Keyboard Only I/O), reconnects so the GATT link is encrypted, then unlocks the control and data channels.
 
-**Start pairing** asks the appliance to show the PIN on its display. That write uses the encrypted control channel, so a PIN must already be saved in **Configure**. It cannot bootstrap the first PIN by itself.
+**Show PIN** asks the appliance to show the 6-digit code on its display for 30 seconds. That write uses the encrypted control channel, so a PIN must already be saved in **Configure**. Open the appliance door if the code is not visible. It cannot bootstrap the first PIN by itself.
 
 If the official app re-pairs the appliance, the PIN often rotates. Status **302** in the logs means enter the new PIN under **Configure**.
 
@@ -91,7 +91,7 @@ Not every model reports every field. Missing keys stay `unknown`.
 | Air Purifier | On/off (`air_filter_on`). Writable after pairing. |
 | Night Mode | On/off (`night_mode` as `1`/`0`). Different from Night Ice. Writable after pairing. |
 | Humidity Control | Normal or Enhanced (`humidity_control` as `1`/`2`). Writable after pairing. |
-| Start pairing | Shows the PIN on the appliance display (needs a configured PIN and a bonded link). |
+| Show PIN | Shows the 6-digit PIN on the appliance display for 30 seconds (needs a configured PIN and a bonded link). |
 
 These temperature entities are **setpoints**, not measured cavity temperatures. The appliance firmware does not expose live fridge/freezer temps over BLE. Values on the wire are Fahrenheit integers. Changing °C/°F on the appliance display is a local preference and does not change the BLE numbers.
 
@@ -154,7 +154,7 @@ The protocol and many other fridge models are documented in [JonGilmore/esphome-
 | Doors work, nothing else | Add the 6-digit PIN under **Configure**. |
 | `status 302` / invalid PIN | The PIN rotated. Copy it from the app or the display and save it again. |
 | Disconnect during poll | Usually a single-slot or idle drop. If it repeats, make sure nothing else is connected. |
-| Start pairing fails | Save the PIN first. `display_pin` only works after bonding. |
+| Show PIN fails | Save the PIN first under **Configure**. `display_pin` only works after bonding. Open the appliance door if the code is not visible. |
 | Writes do nothing | Confirm pairing succeeded (filters/temps populate). Check logs for D5 errors. |
 
 Enable debug logging:

@@ -14,8 +14,8 @@ from .coordinator import SubZeroDataUpdateCoordinator
 
 DISPLAY_PIN = ButtonEntityDescription(
     key="display_pin",
-    name="Start pairing",
-    icon="mdi:key-plus",
+    name="Show PIN",
+    icon="mdi:dialpad",
     entity_category=EntityCategory.CONFIG,
 )
 
@@ -49,5 +49,5 @@ class SubZeroDisplayPinButton(
         )
 
     async def async_press(self) -> None:
-        """Send display_pin to the appliance."""
+        """Ask the appliance to show its PIN on the display."""
         await self.coordinator.async_display_pin()
