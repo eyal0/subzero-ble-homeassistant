@@ -43,6 +43,10 @@ LINK_SETTLE_SECONDS = 0.4
 RECONNECT_GAP_SECONDS = 1.0
 PAIR_TIMEOUT = 60.0
 UNLOCK_TIMEOUT = 15.0
+DISPLAY_PIN_DURATION = 20
+DISPLAY_PIN_RETRY_SECONDS = 3.0
+# Door-closed display_pin fails; keep trying long enough to walk over and open it.
+DISPLAY_PIN_RETRY_TIMEOUT = 120.0
 MAX_FRAME_BYTES = 4096
 UPDATE_INTERVAL_SECONDS = 10
 # ESPHome found back-to-back D5 sets can drop; space grouped flag writes.
@@ -168,7 +172,7 @@ def unlock_command(pin: str) -> bytes:
     ).encode()
 
 
-def display_pin_command(duration: int = 20) -> bytes:
+def display_pin_command(duration: int = DISPLAY_PIN_DURATION) -> bytes:
     """Build a display_pin command that shows the PIN on the appliance."""
     return (
         json.dumps(

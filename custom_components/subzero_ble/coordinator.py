@@ -1,6 +1,7 @@
 """Coordinator for Sub-Zero BLE."""
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 import json
@@ -289,6 +290,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         self.address = entry.data[CONF_ADDRESS]
         self.client: SubZeroBleClient | None = None
         self._connection_status = CONNECTION_DISCONNECTED
+        self._display_pin_task: asyncio.Task[None] | None = None
 
     @property
     def connection_status(self) -> str:
@@ -344,12 +346,26 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         return self.client
 
     async def async_display_pin(self) -> None:
-        """Pair if needed, then ask the appliance to show its PIN on the display."""
+        """Start display_pin retries (door-closed writes fail until a door opens)."""
         client = await self._async_ready_client(require_pin=True)
-        try:
-            await client.async_display_pin()
-        except Exception as err:
-            raise HomeAssistantError(str(err)) from err
+        if self._display_pin_task is not None and not self._display_pin_task.done():
+            self._display_pin_task.cancel()
+            try:
+                await self._display_pin_task
+            except asyncio.CancelledError:
+                pass
+
+        async def _run() -> None:
+            try:
+                await client.async_display_pin()
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                _LOGGER.warning("Show PIN stopped: %s", err)
+
+        self._display_pin_task = self.hass.async_create_task(
+            _run(), name=f"{self.name} show PIN"
+        )
 
     async def async_set_temperature(self, property_key: str, value: float) -> None:
         """Write a fridge or freezer setpoint on D5."""
@@ -450,6 +466,13 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
 
     async def async_disconnect(self) -> None:
         """Disconnect the BLE client."""
+        if self._display_pin_task is not None and not self._display_pin_task.done():
+            self._display_pin_task.cancel()
+            try:
+                await self._display_pin_task
+            except asyncio.CancelledError:
+                pass
+            self._display_pin_task = None
         if self.client is not None:
             await self.client.async_disconnect()
 

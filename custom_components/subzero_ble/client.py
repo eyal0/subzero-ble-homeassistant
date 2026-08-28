@@ -20,6 +20,9 @@ from .const import (
     CONNECTION_DIAGNOSTIC,
     CONNECTION_DISCONNECTED,
     CONNECTION_PAIRED,
+    DISPLAY_PIN_DURATION,
+    DISPLAY_PIN_RETRY_SECONDS,
+    DISPLAY_PIN_RETRY_TIMEOUT,
     GET_ASYNC_COMMAND,
     GET_COMMAND,
     LINK_SETTLE_SECONDS,
@@ -224,27 +227,54 @@ class SubZeroBleClient:
             )
         return self._parse_payload(raw)
 
-    async def async_display_pin(self, duration: int = 20) -> None:
-        """Pair if needed, then ask the appliance to show its PIN on the display."""
+    async def async_display_pin(
+        self, duration: int = DISPLAY_PIN_DURATION
+    ) -> None:
+        """Ask the appliance to show its PIN, retrying until it accepts the command.
+
+        The fridge rejects display_pin when the door is closed. Retry every few
+        seconds so the user can open a door without pressing the button again.
+        """
         if not self._pin:
             raise BleakError(
                 "Enter the 6-digit PIN under Configure first. "
                 "This button uses encrypted channel D5; the fridge shows the "
                 "code during BLE pairing, and display_pin only works after bonding."
             )
-        async with self._lock:
-            await self._ensure_connected(require_pair=True)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + DISPLAY_PIN_RETRY_TIMEOUT
+        while True:
             try:
-                await self._write_display_pin(duration)
+                async with self._lock:
+                    await self._ensure_connected(require_pair=True)
+                    try:
+                        await self._write_display_pin(duration)
+                        return
+                    except BleakError as err:
+                        if not _is_insufficient_auth(err):
+                            raise
+                        _LOGGER.info(
+                            "display_pin hit insufficient authentication; "
+                            "re-pairing and reconnecting"
+                        )
+                        await self._reconnect_encrypted(force_pair=True)
+                        await self._write_display_pin(duration)
+                        return
             except BleakError as err:
-                if not _is_insufficient_auth(err):
+                if not _is_display_pin_retryable(err):
                     raise
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    raise BleakError(
+                        f"{err} Open a refrigerator or freezer door and "
+                        "press Show PIN again."
+                    ) from err
                 _LOGGER.info(
-                    "display_pin hit insufficient authentication; "
-                    "re-pairing and reconnecting"
+                    "display_pin failed (%s); retrying in %ss (open a door)",
+                    err,
+                    DISPLAY_PIN_RETRY_SECONDS,
                 )
-                await self._reconnect_encrypted(force_pair=True)
-                await self._write_display_pin(duration)
+                await asyncio.sleep(min(DISPLAY_PIN_RETRY_SECONDS, remaining))
 
     async def _write_display_pin(self, duration: int) -> None:
         """Write display_pin on D5. Requires an encrypted, unlocked link."""
@@ -753,6 +783,14 @@ def _is_insufficient_auth(err: BaseException) -> bool:
             "not paired",
         )
     )
+
+
+def _is_display_pin_retryable(err: BaseException) -> bool:
+    """Return True if display_pin should be sent again (door likely closed)."""
+    text = str(err).lower()
+    if "enter the 6-digit pin" in text:
+        return False
+    return True
 
 
 def _is_link_drop(err: BaseException) -> bool:
