@@ -74,7 +74,7 @@ The same 6-digit code is used for BLE bonding (the passkey shown on the applianc
 
 **Show PIN** writes `display_pin` on D5. A round succeeds when D5 returns `status: 0`. If the write is rejected (typically because a door is closed), it retries every 3 seconds for up to 2 minutes.
 
-If the official app re-pairs the appliance, the PIN often rotates. Status **3** or **302** means the code was rejected — enter the new PIN under **Configure**.
+If the official app re-pairs the appliance, the PIN often rotates. Status **3** or **302** means the code was rejected. Home Assistant starts a **Reauthenticate** flow and asks the appliance to show its PIN; enter the new 6-digit code there (or later under **Configure**).
 
 ## Entities
 
@@ -152,7 +152,7 @@ The protocol and many other fridge models are documented in [JonGilmore/esphome-
 | --- | --- |
 | No devices found | Enable Bluetooth on the appliance, keep it in range of the HA adapter, and disconnect the phone app. |
 | Doors work, nothing else | Add the 6-digit PIN under **Configure**. |
-| `status 302` / invalid PIN | The PIN rotated. Copy it from the app or the display and save it again. |
+| `status 302` / invalid PIN | The PIN rotated. Complete **Reauthenticate** (Show PIN + new code), or save it under **Configure**. |
 | Disconnect during poll | Usually a single-slot or idle drop. If it repeats, make sure nothing else is connected. |
 | Show PIN fails | Open a door. Check logs for per-channel `display_pin` results. Encrypted D5/D6 writes may fail until bonded. |
 | Writes do nothing | Confirm pairing succeeded (filters/temps populate). Check logs for D5 errors. |

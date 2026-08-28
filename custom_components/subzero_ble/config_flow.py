@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -44,16 +45,17 @@ def _title(discovery_info: BluetoothServiceInfoBleak) -> str:
     return name
 
 
-def _pin_schema(default: str | None = None) -> vol.Schema:
+def _pin_schema(default: str | None = None, *, required: bool = False) -> vol.Schema:
     """Return the PIN form schema."""
+    pin_selector = selector.TextSelector(
+        selector.TextSelectorConfig(
+            type=selector.TextSelectorType.PASSWORD,
+        )
+    )
+    if required:
+        return vol.Schema({vol.Required(CONF_PIN): pin_selector})
     return vol.Schema(
-        {
-            vol.Optional(CONF_PIN, default=default or ""): selector.TextSelector(
-                selector.TextSelectorConfig(
-                    type=selector.TextSelectorType.PASSWORD,
-                )
-            ),
-        }
+        {vol.Optional(CONF_PIN, default=default or ""): pin_selector}
     )
 
 
@@ -121,6 +123,17 @@ async def _async_cancel_task(task: asyncio.Task[None] | None) -> None:
         await task
     except asyncio.CancelledError:
         pass
+
+
+async def _async_pause_runtime(entry: ConfigEntry) -> tuple[Any, Any]:
+    """Stop polling and drop BLE so PIN verify can use the only connection."""
+    coordinator = getattr(entry, "runtime_data", None)
+    if coordinator is None:
+        return None, None
+    interval = coordinator.update_interval
+    coordinator.update_interval = None
+    await coordinator.async_disconnect()
+    return coordinator, interval
 
 
 class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -294,6 +307,63 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": self._name or "the appliance"},
         )
 
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Perform reauthentication when the appliance rejects the PIN."""
+        self._address = entry_data[CONF_ADDRESS]
+        self._name = self._get_reauth_entry().title
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Prompt for a new PIN after the stored code was rejected."""
+        errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
+        if user_input is not None:
+            try:
+                pin = normalize_pin(user_input.get(CONF_PIN))
+            except ValueError:
+                errors[CONF_PIN] = "invalid_pin"
+            else:
+                if not pin:
+                    errors[CONF_PIN] = "invalid_pin"
+                else:
+                    await self._async_stop_display_pin()
+                    coordinator, saved_interval = await _async_pause_runtime(
+                        reauth_entry
+                    )
+                    try:
+                        await _async_verify_pin(
+                            self.hass,
+                            self._address or reauth_entry.data[CONF_ADDRESS],
+                            pin,
+                        )
+                    except (
+                        SubZeroInvalidPin,
+                        SubZeroPairingError,
+                        BleakError,
+                        TimeoutError,
+                        OSError,
+                    ) as err:
+                        errors["base"] = _pin_verify_error(err)
+                        if coordinator is not None:
+                            coordinator.update_interval = saved_interval
+                    else:
+                        return self.async_update_reload_and_abort(
+                            reauth_entry,
+                            data_updates={CONF_PIN: pin},
+                        )
+
+        await self._async_ensure_display_pin()
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=_pin_schema(required=True),
+            errors=errors,
+            description_placeholders={"name": self._name or "the appliance"},
+        )
+
 
 class SubZeroOptionsFlow(OptionsFlow):
     """Handle PIN changes for an existing Sub-Zero appliance."""
@@ -335,16 +405,6 @@ class SubZeroOptionsFlow(OptionsFlow):
         if client is not None:
             await client.async_disconnect()
 
-    async def _async_pause_runtime(self) -> tuple[Any, Any]:
-        """Stop polling and drop BLE so PIN verify can use the only connection."""
-        coordinator = getattr(self._config_entry, "runtime_data", None)
-        if coordinator is None:
-            return None, None
-        interval = coordinator.update_interval
-        coordinator.update_interval = None
-        await coordinator.async_disconnect()
-        return coordinator, interval
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -357,7 +417,9 @@ class SubZeroOptionsFlow(OptionsFlow):
                 errors[CONF_PIN] = "invalid_pin"
             else:
                 await self._async_stop_display_pin()
-                coordinator, saved_interval = await self._async_pause_runtime()
+                coordinator, saved_interval = await _async_pause_runtime(
+                    self._config_entry
+                )
                 try:
                     if pin:
                         await _async_verify_pin(

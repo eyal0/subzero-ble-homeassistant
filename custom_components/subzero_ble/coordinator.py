@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 import json
 import logging
-from typing import Any
+from typing import Any, NoReturn
 
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -284,6 +284,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             hass,
             _LOGGER,
             name=entry.title,
+            config_entry=entry,
             update_interval=timedelta(seconds=UPDATE_INTERVAL_SECONDS),
         )
         self.entry = entry
@@ -321,6 +322,12 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
     def _pin(self) -> str | None:
         """Return the configured pairing PIN, if any."""
         return self.entry.data.get(CONF_PIN) or self.entry.options.get(CONF_PIN)
+
+    def _raise_invalid_pin(self, err: SubZeroInvalidPin) -> NoReturn:
+        """Start reauth after the appliance rejected the stored PIN."""
+        self._set_connection_status(CONNECTION_INVALID_PIN)
+        self.entry.async_start_reauth(self.hass)
+        raise HomeAssistantError(str(err)) from err
 
     async def _async_ready_client(self, *, require_pin: bool = False) -> SubZeroBleClient:
         """Return a BLE client, creating it if needed."""
@@ -379,6 +386,8 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         client = await self._async_ready_client(require_pin=True)
         try:
             await client.async_set_property(property_key, wire)
+        except SubZeroInvalidPin as err:
+            self._raise_invalid_pin(err)
         except Exception as err:
             raise HomeAssistantError(str(err)) from err
         if property_key == "ref_set_temp":
@@ -398,6 +407,8 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         client = await self._async_ready_client(require_pin=True)
         try:
             await client.async_set_property(key, value)
+        except SubZeroInvalidPin as err:
+            self._raise_invalid_pin(err)
         except Exception as err:
             raise HomeAssistantError(str(err)) from err
         self._apply_push(SubZeroData(fields={key: value}))
@@ -429,6 +440,8 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         client = await self._async_ready_client(require_pin=True)
         try:
             await client.async_set_properties(params)
+        except SubZeroInvalidPin as err:
+            self._raise_invalid_pin(err)
         except Exception as err:
             raise HomeAssistantError(str(err)) from err
         update = SubZeroData(fields=dict(params))
@@ -509,7 +522,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             if self.client is not None:
                 await self.client.async_disconnect()
             self._set_connection_status(CONNECTION_INVALID_PIN)
-            raise UpdateFailed(str(err)) from err
+            raise ConfigEntryAuthFailed(str(err)) from err
         except Exception as err:
             if self.client is not None:
                 await self.client.async_disconnect()
