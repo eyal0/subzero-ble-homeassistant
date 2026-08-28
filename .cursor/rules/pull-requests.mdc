@@ -6,3 +6,5 @@ alwaysApply: true
 # Pull requests
 
 Follow `AGENTS.md`. Do not commit, push, or merge to `main`. Finish every change with a pull request and leave it open for review.
+
+The GitHub PR branch name must match the local branch name so `git push` updates that PR. Do not let a cloud agent publish a different `cursor/…` branch for the same change.
