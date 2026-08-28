@@ -12,14 +12,17 @@ from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 
 from .const import (
+    CHAR_D4_UUID,
     CHAR_D5_UUID,
     CHAR_D6_UUID,
     CHAR_D7_UUID,
+    CHAR_D8_UUID,
     CONNECT_TIMEOUT,
     CONNECTION_CONNECTED,
     CONNECTION_DIAGNOSTIC,
     CONNECTION_DISCONNECTED,
     CONNECTION_PAIRED,
+    DISPLAY_PIN_ACK_TIMEOUT,
     DISPLAY_PIN_DURATION,
     DISPLAY_PIN_RETRY_SECONDS,
     DISPLAY_PIN_RETRY_TIMEOUT,
@@ -230,28 +233,22 @@ class SubZeroBleClient:
     async def async_display_pin(
         self, duration: int = DISPLAY_PIN_DURATION
     ) -> None:
-        """Ask the appliance to show its PIN, retrying until it accepts the command.
+        """Ask the appliance to show its PIN, retrying until a channel accepts.
 
-        The fridge rejects display_pin when the door is closed. Retry every few
-        seconds so the user can open a door without pressing the button again.
+        Tries D4–D8 each round. The fridge may reject display_pin when the door
+        is closed; retry every few seconds so the user can open a door.
         """
-        if not self._pin:
-            raise BleakError(
-                "Enter the 6-digit PIN under Configure first. "
-                "This button uses encrypted channel D5; the fridge shows the "
-                "code during BLE pairing, and display_pin only works after bonding."
-            )
         loop = asyncio.get_running_loop()
         deadline = loop.time() + DISPLAY_PIN_RETRY_TIMEOUT
         while True:
             try:
                 async with self._lock:
-                    await self._ensure_connected(require_pair=True)
+                    await self._ensure_connected(require_pair=False)
                     try:
                         await self._write_display_pin(duration)
                         return
                     except BleakError as err:
-                        if not _is_insufficient_auth(err):
+                        if not _is_insufficient_auth(err) or not self._pin:
                             raise
                         _LOGGER.info(
                             "display_pin hit insufficient authentication; "
@@ -277,43 +274,103 @@ class SubZeroBleClient:
                 await asyncio.sleep(min(DISPLAY_PIN_RETRY_SECONDS, remaining))
 
     async def _write_display_pin(self, duration: int) -> None:
-        """Write display_pin on D5. Requires an encrypted, unlocked link."""
+        """Write display_pin on every Sub-Zero characteristic that is visible."""
         assert self._client is not None
-        channel = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
-        if channel is None:
-            raise BleakError(
-                "D5 is not available. Pairing may not have completed — "
-                "check the PIN and watch the appliance display."
+        command = display_pin_command(duration)
+        accepted: list[str] = []
+        errors: list[str] = []
+        wrote = 0
+        for uuid in (
+            CHAR_D4_UUID,
+            CHAR_D5_UUID,
+            CHAR_D6_UUID,
+            CHAR_D7_UUID,
+            CHAR_D8_UUID,
+        ):
+            channel = _characteristic_by_uuid(self._client, uuid)
+            name = _channel_name(uuid)
+            if channel is None:
+                _LOGGER.info("display_pin: %s is not in the GATT table", name)
+                continue
+            try:
+                result = await self._try_display_pin_on_channel(
+                    channel, command, duration
+                )
+            except BleakError as err:
+                _LOGGER.info("display_pin on %s failed: %s", name, err)
+                errors.append(f"{name}: {err}")
+                continue
+            if result == "accepted":
+                accepted.append(name)
+            elif result == "rejected":
+                errors.append(f"{name}: rejected")
+            else:
+                wrote += 1
+        if accepted:
+            _LOGGER.info(
+                "display_pin accepted on %s; watch the appliance display",
+                ", ".join(accepted),
             )
+            return
+        if errors:
+            raise BleakError(
+                "display_pin was not accepted on any channel: "
+                + "; ".join(errors)
+            )
+        if wrote:
+            raise BleakError(
+                "display_pin was written but no channel returned status 0"
+            )
+        raise BleakError("No Sub-Zero characteristics were available for display_pin")
+
+    async def _try_display_pin_on_channel(
+        self,
+        channel: BleakGATTCharacteristic,
+        command: bytes,
+        duration: int,
+    ) -> str:
+        """Send display_pin on one characteristic. Return accepted/rejected/wrote."""
+        name = _channel_name(channel)
         await self._subscribe_optional(channel)
-        if str(channel.uuid).lower() not in self._subscribed:
-            raise BleakError(
-                "Could not subscribe to D5. The adapter is not bonded yet."
-            )
-        if not self._unlocked:
-            d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
-            await self._unlock_channels(channel, d6)
-        if not self._unlocked:
-            raise BleakError(
-                "Could not unlock D5. Show PIN needs a bonded, unlocked "
-                "control channel."
-            )
-        _LOGGER.info("Sending display_pin on D5 for %s seconds", duration)
-        raw = await self._write_and_wait(
-            channel, display_pin_command(duration), timeout=UNLOCK_TIMEOUT
+        _LOGGER.info("Sending display_pin on %s for %s seconds", name, duration)
+        subscribed = str(channel.uuid).lower() in self._subscribed
+        if subscribed:
+            try:
+                raw = await self._write_and_wait(
+                    channel, command, timeout=DISPLAY_PIN_ACK_TIMEOUT
+                )
+            except BleakError as err:
+                if "timed out" in str(err).lower():
+                    _LOGGER.info("display_pin written to %s; no JSON ack", name)
+                    return "wrote"
+                raise
+            payload = _loads_json(raw)
+            if payload is None:
+                _LOGGER.info("display_pin on %s got a non-JSON response", name)
+                return "wrote"
+            status = payload.get("status")
+            if status == 0:
+                return "accepted"
+            if status is None:
+                return "wrote"
+            _LOGGER.info("display_pin on %s returned status %s", name, status)
+            return "rejected"
+        assert self._client is not None
+        with_response = "write" in channel.properties
+        _log_ble_pdu(
+            "TX",
+            channel,
+            command,
+            extra=f"write_with_response={with_response}",
         )
-        payload = _loads_json(raw)
-        status = None if payload is None else payload.get("status")
-        if status == 302:
-            raise SubZeroInvalidPin(
-                "Appliance rejected PIN (status 302). "
-                "The code may have rotated — check the display."
-            )
-        if status not in (0, None):
-            raise BleakError(
-                f"Appliance rejected display_pin (status {status})"
-            )
-        _LOGGER.info("display_pin sent; watch the appliance display for 20 seconds")
+        await self._client.write_gatt_char(
+            channel, command, response=with_response
+        )
+        _LOGGER.info(
+            "display_pin written to %s without a notification subscription",
+            name,
+        )
+        return "wrote"
 
     async def async_set_property(self, key: str, value: object) -> None:
         """Write one property on the encrypted D5 control channel."""

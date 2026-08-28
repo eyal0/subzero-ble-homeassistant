@@ -347,7 +347,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
 
     async def async_display_pin(self) -> None:
         """Start display_pin retries (door-closed writes fail until a door opens)."""
-        client = await self._async_ready_client(require_pin=True)
+        client = await self._async_ready_client(require_pin=False)
         if self._display_pin_task is not None and not self._display_pin_task.done():
             self._display_pin_task.cancel()
             try:

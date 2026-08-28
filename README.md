@@ -72,7 +72,7 @@ The same 6-digit code is used for BLE bonding (the passkey shown on the applianc
 2. Enter that PIN during setup, or later under **Configure**.
 3. The integration bonds with BlueZ (Keyboard Only I/O), reconnects so the GATT link is encrypted, then unlocks the control and data channels.
 
-**Show PIN** sends `display_pin` on the encrypted control channel (needs a PIN in **Configure**). If the appliance rejects the command (typically because a door is closed), the integration retries every 3 seconds for up to 2 minutes. Open a door after pressing the button. It cannot bootstrap the first PIN by itself.
+**Show PIN** writes `display_pin` on every visible channel (D4–D8), including encrypted ones, without unlocking first. A round succeeds when any channel returns `status: 0`. If none accept (typically because a door is closed), it retries every 3 seconds for up to 2 minutes.
 
 If the official app re-pairs the appliance, the PIN often rotates. Status **302** in the logs means enter the new PIN under **Configure**.
 
@@ -91,7 +91,7 @@ Not every model reports every field. Missing keys stay `unknown`.
 | Air Purifier | On/off (`air_filter_on`). Writable after pairing. |
 | Night Mode | On/off (`night_mode` as `1`/`0`). Different from Night Ice. Writable after pairing. |
 | Humidity Control | Normal or Enhanced (`humidity_control` as `1`/`2`). Writable after pairing. |
-| Show PIN | Shows the 6-digit PIN on the appliance display for 20 seconds. Retries every 3 seconds if the fridge rejects the command (open a door). Needs a configured PIN and a bonded link. |
+| Show PIN | Writes `display_pin` on D4–D8. Retries every 3 seconds until a channel returns status 0 (open a door). |
 
 These temperature entities are **setpoints**, not measured cavity temperatures. The appliance firmware does not expose live fridge/freezer temps over BLE. Values on the wire are Fahrenheit integers. Changing °C/°F on the appliance display is a local preference and does not change the BLE numbers.
 
@@ -154,7 +154,7 @@ The protocol and many other fridge models are documented in [JonGilmore/esphome-
 | Doors work, nothing else | Add the 6-digit PIN under **Configure**. |
 | `status 302` / invalid PIN | The PIN rotated. Copy it from the app or the display and save it again. |
 | Disconnect during poll | Usually a single-slot or idle drop. If it repeats, make sure nothing else is connected. |
-| Show PIN fails | Save the PIN first under **Configure**. `display_pin` only works after bonding. Open the appliance door if the code is not visible. |
+| Show PIN fails | Open a door. Check logs for per-channel `display_pin` results. Encrypted D5/D6 writes may fail until bonded. |
 | Writes do nothing | Confirm pairing succeeded (filters/temps populate). Check logs for D5 errors. |
 
 Enable debug logging:

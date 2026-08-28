@@ -45,6 +45,7 @@ PAIR_TIMEOUT = 60.0
 UNLOCK_TIMEOUT = 15.0
 DISPLAY_PIN_DURATION = 20
 DISPLAY_PIN_RETRY_SECONDS = 3.0
+DISPLAY_PIN_ACK_TIMEOUT = 3.0
 # Door-closed display_pin fails; keep trying long enough to walk over and open it.
 DISPLAY_PIN_RETRY_TIMEOUT = 120.0
 MAX_FRAME_BYTES = 4096
