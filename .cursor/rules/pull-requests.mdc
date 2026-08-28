@@ -1,0 +1,8 @@
+---
+description: Submit all changes as a GitHub pull request for review; never commit or merge to main.
+alwaysApply: true
+---
+
+# Pull requests
+
+Follow `AGENTS.md`. Do not commit, push, or merge to `main`. Finish every change with a pull request and leave it open for review.
