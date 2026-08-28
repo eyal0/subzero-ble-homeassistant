@@ -224,7 +224,7 @@ class SubZeroBleClient:
             )
         return self._parse_payload(raw)
 
-    async def async_display_pin(self, duration: int = 30) -> None:
+    async def async_display_pin(self, duration: int = 20) -> None:
         """Pair if needed, then ask the appliance to show its PIN on the display."""
         if not self._pin:
             raise BleakError(
@@ -283,7 +283,7 @@ class SubZeroBleClient:
             raise BleakError(
                 f"Appliance rejected display_pin (status {status})"
             )
-        _LOGGER.info("display_pin sent; watch the appliance display for 30 seconds")
+        _LOGGER.info("display_pin sent; watch the appliance display for 20 seconds")
 
     async def async_set_property(self, key: str, value: object) -> None:
         """Write one property on the encrypted D5 control channel."""

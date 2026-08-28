@@ -168,7 +168,7 @@ def unlock_command(pin: str) -> bytes:
     ).encode()
 
 
-def display_pin_command(duration: int = 30) -> bytes:
+def display_pin_command(duration: int = 20) -> bytes:
     """Build a display_pin command that shows the PIN on the appliance."""
     return (
         json.dumps(
