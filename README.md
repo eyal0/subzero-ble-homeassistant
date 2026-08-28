@@ -58,7 +58,7 @@ Copy `custom_components/subzero_ble` into `<config>/custom_components/subzero_bl
 
 1. Add the integration (HACS my-link above, or **Settings** → **Devices & services** → **Add integration**).
 2. Select the appliance.
-3. Enter the **6-digit PIN**, or leave it blank for diagnostic-only mode.
+3. When the PIN step opens, the integration starts a **Show PIN** loop. Look at the appliance display (open a door if nothing appears) and enter the **6-digit PIN**, or leave it blank for diagnostic-only mode. The same happens under **Configure**.
 
 ### Diagnostic-only (no PIN)
 
