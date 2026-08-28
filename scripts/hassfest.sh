@@ -14,6 +14,10 @@ if [ ! -x "$VENV/bin/python" ] || [ ! -d "$CORE_DIR" ]; then
   exit 1
 fi
 
+# hassfest's ruff plugin resolves `ruff` via PATH (shutil.which), so put the
+# venv on PATH instead of only calling its python by absolute path.
+export PATH="$VENV/bin:$PATH"
+
 cd "$CORE_DIR"
 exec "$VENV/bin/python" -m script.hassfest \
   --integration-path "$REPO_ROOT/custom_components/subzero_ble" "$@"
