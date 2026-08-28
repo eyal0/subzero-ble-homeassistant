@@ -18,7 +18,7 @@
         "data": {
           "pin": "PIN"
         },
-        "description": "Enter the 6-digit PIN shown on {name}. Watch the appliance display, or copy the PIN from the official Sub-Zero Group Owner app. Leave blank to use diagnostic-only mode (door status without pairing).",
+        "description": "Home Assistant is asking {name} to show its PIN now. Go look at the appliance display and enter the 6-digit code below (open a door if nothing appears). You can also copy the PIN from the Sub-Zero Group Owner app. Leave blank for diagnostic-only mode (door status without pairing).",
         "title": "Appliance PIN"
       },
       "user": {
@@ -38,7 +38,7 @@
         "data": {
           "pin": "PIN"
         },
-        "description": "Enter the 6-digit PIN from the appliance display. Leave blank to stay in diagnostic-only mode.",
+        "description": "Home Assistant is asking the appliance to show its PIN now. Go look at the device display and enter the 6-digit code below (open a door if nothing appears). Leave blank to stay in diagnostic-only mode.",
         "title": "Appliance PIN"
       }
     }

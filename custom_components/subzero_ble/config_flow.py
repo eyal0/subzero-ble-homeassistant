@@ -1,5 +1,9 @@
 """Config flow for the Sub-Zero BLE integration."""
 
+from __future__ import annotations
+
+import asyncio
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -16,10 +20,13 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.const import CONF_ADDRESS
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
+from .client import SubZeroBleClient
 from .const import CONF_PIN, DOMAIN, LOCAL_NAME_PREFIX, normalize_pin
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _is_subzero_device(discovery_info: BluetoothServiceInfoBleak) -> bool:
@@ -48,6 +55,49 @@ def _pin_schema(default: str | None = None) -> vol.Schema:
     )
 
 
+async def _async_start_standalone_display_pin(
+    hass: HomeAssistant, address: str
+) -> tuple[asyncio.Task[None], SubZeroBleClient] | tuple[None, None]:
+    """Start a background display_pin loop with a temporary BLE client."""
+    ble_device = bluetooth.async_ble_device_from_address(
+        hass, address, connectable=True
+    )
+    if ble_device is None:
+        _LOGGER.warning(
+            "Cannot start Show PIN during setup; %s is not currently in range",
+            address,
+        )
+        return None, None
+
+    client = SubZeroBleClient(ble_device)
+
+    async def _run() -> None:
+        try:
+            await client.async_display_pin()
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            _LOGGER.warning("Show PIN during setup stopped: %s", err)
+        finally:
+            await client.async_disconnect()
+
+    task = hass.async_create_task(
+        _run(), name=f"{DOMAIN} display_pin {address}"
+    )
+    return task, client
+
+
+async def _async_cancel_task(task: asyncio.Task[None] | None) -> None:
+    """Cancel a background task and wait for it to finish."""
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Sub-Zero BLE."""
 
@@ -59,12 +109,36 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovered_devices: dict[str, BluetoothServiceInfoBleak] = {}
         self._address: str | None = None
         self._name: str | None = None
+        self._display_pin_task: asyncio.Task[None] | None = None
+        self._display_pin_client: SubZeroBleClient | None = None
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         """Return the options flow for this config entry."""
         return SubZeroOptionsFlow(config_entry)
+
+    async def _async_ensure_display_pin(self) -> None:
+        """Start asking the appliance to show its PIN if not already running."""
+        if self._address is None:
+            return
+        if self._display_pin_task is not None and not self._display_pin_task.done():
+            return
+        task, client = await _async_start_standalone_display_pin(
+            self.hass, self._address
+        )
+        self._display_pin_task = task
+        self._display_pin_client = client
+
+    async def _async_stop_display_pin(self) -> None:
+        """Stop a setup-time Show PIN loop and free the BLE connection."""
+        task = self._display_pin_task
+        self._display_pin_task = None
+        client = self._display_pin_client
+        self._display_pin_client = None
+        await _async_cancel_task(task)
+        if client is not None:
+            await client.async_disconnect()
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -164,6 +238,7 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors[CONF_PIN] = "invalid_pin"
             else:
                 assert self._address is not None
+                await self._async_stop_display_pin()
                 data: dict[str, Any] = {CONF_ADDRESS: self._address}
                 if pin:
                     data[CONF_PIN] = pin
@@ -172,6 +247,7 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     data=data,
                 )
 
+        await self._async_ensure_display_pin()
         return self.async_show_form(
             step_id="pin",
             data_schema=_pin_schema(),
@@ -186,6 +262,39 @@ class SubZeroOptionsFlow(OptionsFlow):
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
         self._config_entry = config_entry
+        self._display_pin_task: asyncio.Task[None] | None = None
+        self._display_pin_client: SubZeroBleClient | None = None
+
+    async def _async_ensure_display_pin(self) -> None:
+        """Start asking the appliance to show its PIN if not already running."""
+        coordinator = getattr(self._config_entry, "runtime_data", None)
+        if coordinator is not None and hasattr(
+            coordinator, "async_ensure_display_pin"
+        ):
+            try:
+                await coordinator.async_ensure_display_pin()
+            except Exception as err:
+                _LOGGER.warning("Show PIN from Configure stopped: %s", err)
+            return
+
+        if self._display_pin_task is not None and not self._display_pin_task.done():
+            return
+        address = self._config_entry.data.get(CONF_ADDRESS)
+        if not address:
+            return
+        task, client = await _async_start_standalone_display_pin(self.hass, address)
+        self._display_pin_task = task
+        self._display_pin_client = client
+
+    async def _async_stop_display_pin(self) -> None:
+        """Stop a standalone Show PIN loop started by this options flow."""
+        task = self._display_pin_task
+        self._display_pin_task = None
+        client = self._display_pin_client
+        self._display_pin_client = None
+        await _async_cancel_task(task)
+        if client is not None:
+            await client.async_disconnect()
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -198,6 +307,7 @@ class SubZeroOptionsFlow(OptionsFlow):
             except ValueError:
                 errors[CONF_PIN] = "invalid_pin"
             else:
+                await self._async_stop_display_pin()
                 data = {**self._config_entry.data}
                 if pin:
                     data[CONF_PIN] = pin
@@ -208,6 +318,7 @@ class SubZeroOptionsFlow(OptionsFlow):
                 )
                 return self.async_create_entry(title="", data={})
 
+        await self._async_ensure_display_pin()
         return self.async_show_form(
             step_id="init",
             data_schema=_pin_schema(self._config_entry.data.get(CONF_PIN)),

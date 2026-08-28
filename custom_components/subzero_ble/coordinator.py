@@ -367,6 +367,12 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             _run(), name=f"{self.name} show PIN"
         )
 
+    async def async_ensure_display_pin(self) -> None:
+        """Start Show PIN if a loop is not already running."""
+        if self._display_pin_task is not None and not self._display_pin_task.done():
+            return
+        await self.async_display_pin()
+
     async def async_set_temperature(self, property_key: str, value: float) -> None:
         """Write a fridge or freezer setpoint on D5."""
         wire = int(round(value))
