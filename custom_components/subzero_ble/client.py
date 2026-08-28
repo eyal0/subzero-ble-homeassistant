@@ -281,11 +281,7 @@ class SubZeroBleClient:
         errors: list[str] = []
         wrote = 0
         for uuid in (
-            CHAR_D4_UUID,
             CHAR_D5_UUID,
-            CHAR_D6_UUID,
-            CHAR_D7_UUID,
-            CHAR_D8_UUID,
         ):
             channel = _characteristic_by_uuid(self._client, uuid)
             name = _channel_name(uuid)
