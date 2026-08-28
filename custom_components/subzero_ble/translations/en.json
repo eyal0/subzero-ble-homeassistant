@@ -4,7 +4,8 @@
       "already_configured": "Device is already configured",
       "already_in_progress": "Device configuration is already in progress",
       "no_devices_found": "No Sub-Zero Group appliances were found. Make sure the appliance is nearby and Bluetooth is enabled on it.",
-      "not_supported": "Device not supported"
+      "not_supported": "Device not supported",
+      "reauth_successful": "Re-authentication was successful"
     },
     "error": {
       "cannot_connect": "Could not reach the appliance to check the PIN. Make sure it is nearby and Bluetooth is on, then try again.",
@@ -22,6 +23,13 @@
         },
         "description": "Home Assistant is asking {name} to show its PIN now. Go look at the appliance display and enter the 6-digit code below (open a door if nothing appears). You can also copy the PIN from the Sub-Zero Group Owner app. Leave blank for diagnostic-only mode (door status without pairing).",
         "title": "Appliance PIN"
+      },
+      "reauth_confirm": {
+        "data": {
+          "pin": "PIN"
+        },
+        "description": "The PIN for {name} was rejected. Home Assistant is asking the appliance to show its PIN now. Go look at the display and enter the new 6-digit code (open a door if nothing appears).",
+        "title": "Reauthenticate"
       },
       "user": {
         "data": {

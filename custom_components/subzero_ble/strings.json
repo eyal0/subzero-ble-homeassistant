@@ -17,6 +17,13 @@
         "data": {
           "pin": "PIN"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate",
+        "description": "The PIN for {name} was rejected. Home Assistant is asking the appliance to show its PIN now. Go look at the display and enter the new 6-digit code (open a door if nothing appears).",
+        "data": {
+          "pin": "PIN"
+        }
       }
     },
     "error": {
@@ -28,7 +35,8 @@
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
       "already_in_progress": "[%key:common::config_flow::abort::already_in_progress%]",
       "no_devices_found": "No Sub-Zero Group appliances were found. Make sure the appliance is nearby and Bluetooth is enabled on it.",
-      "not_supported": "Device not supported"
+      "not_supported": "Device not supported",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]"
     }
   },
   "options": {

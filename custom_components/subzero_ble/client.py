@@ -570,33 +570,26 @@ class SubZeroBleClient:
             await self._subscribe(d7)
 
         if self._pin:
-            try:
+            await self._subscribe_encrypted_channels(d5, d6)
+            if not self._has_encrypted_subscription(d5, d6):
+                _LOGGER.info(
+                    "D5/D6 need an encrypted ATT link; encrypting the existing bond"
+                )
+                await self._encrypt_existing_bond()
+                d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
+                d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
                 await self._subscribe_encrypted_channels(d5, d6)
-                if not self._has_encrypted_subscription(d5, d6):
-                    _LOGGER.info(
-                        "D5/D6 need an encrypted ATT link; encrypting the existing bond"
-                    )
-                    await self._encrypt_existing_bond()
-                    d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
-                    d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
-                    await self._subscribe_encrypted_channels(d5, d6)
-            except SubZeroInvalidPin as err:
-                _LOGGER.warning("%s", err)
-                if d7 is None:
-                    raise
+            if d6 is not None and str(d6.uuid).lower() in self._subscribed:
+                self._poll_channel = d6
+                _LOGGER.info("Using D6 for full-state polling after unlock")
+            elif d7 is not None:
                 self._poll_channel = d7
+                _LOGGER.warning(
+                    "Unlock attempted; falling back to D7 polling. "
+                    "D5/D6 still require encryption — the BlueZ bond may be stale."
+                )
             else:
-                if d6 is not None and str(d6.uuid).lower() in self._subscribed:
-                    self._poll_channel = d6
-                    _LOGGER.info("Using D6 for full-state polling after unlock")
-                elif d7 is not None:
-                    self._poll_channel = d7
-                    _LOGGER.warning(
-                        "Unlock attempted; falling back to D7 polling. "
-                        "D5/D6 still require encryption — the BlueZ bond may be stale."
-                    )
-                else:
-                    self._poll_channel = _select_poll_channel(self._client)
+                self._poll_channel = _select_poll_channel(self._client)
         else:
             self._poll_channel = d7 or _select_poll_channel(self._client)
             if d6 is not None:
