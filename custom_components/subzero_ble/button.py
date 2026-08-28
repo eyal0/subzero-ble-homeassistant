@@ -10,6 +10,8 @@ from . import SubZeroConfigEntry
 from .coordinator import SubZeroDataUpdateCoordinator
 from .entity import SubZeroEntity
 
+PARALLEL_UPDATES = 1
+
 DISPLAY_PIN = ButtonEntityDescription(
     key="display_pin",
     name="Show PIN",

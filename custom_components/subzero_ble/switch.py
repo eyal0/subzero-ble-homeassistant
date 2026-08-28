@@ -12,6 +12,8 @@ from . import SubZeroConfigEntry
 from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator, field_bool
 from .entity import SubZeroEntity
 
+PARALLEL_UPDATES = 1
+
 
 @dataclass(frozen=True, kw_only=True)
 class SubZeroSwitchEntityDescription(SwitchEntityDescription):

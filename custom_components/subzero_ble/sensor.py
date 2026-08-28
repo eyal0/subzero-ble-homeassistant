@@ -35,6 +35,8 @@ from .coordinator import (
 )
 from .entity import SubZeroEntity
 
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class SubZeroSensorEntityDescription(SensorEntityDescription):

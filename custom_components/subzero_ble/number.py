@@ -18,6 +18,8 @@ from . import SubZeroConfigEntry
 from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator
 from .entity import SubZeroEntity
 
+PARALLEL_UPDATES = 1
+
 # Wire values match the appliance BLE integers (Fahrenheit).
 FRIDGE_TEMP_MIN = 34
 FRIDGE_TEMP_MAX = 42
