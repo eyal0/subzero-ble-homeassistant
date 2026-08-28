@@ -6,3 +6,5 @@ alwaysApply: true
 # Pull requests
 
 Follow `AGENTS.md`. Do not commit, push, or merge to `main`. Finish every change with a pull request and leave it open for review.
+
+The GitHub PR branch name must match the local branch name. After the remote branch exists, `git fetch` and `git branch --set-upstream-to=eyal0/<branch>`. If the cloud agent rewrote the commit, `git reset --hard @{u}` so `git pull` and `git push` work. Do not let a cloud agent publish a different `cursor/…` branch for the same change.
