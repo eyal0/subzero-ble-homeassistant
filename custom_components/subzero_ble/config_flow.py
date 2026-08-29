@@ -5,16 +5,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Protocol
 
 import voluptuous as vol
 from bleak.exc import BleakError
 
 from homeassistant.components import bluetooth
-from homeassistant.components.bluetooth import (
-    BluetoothServiceInfoBleak,
-    async_discovered_service_info,
-)
+from homeassistant.components.bluetooth import async_discovered_service_info
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -30,6 +27,13 @@ from .const import CONF_PIN, DOMAIN, LOCAL_NAME_PREFIX, normalize_pin
 from .pairing import SubZeroPairingError
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class BluetoothServiceInfoBleak(Protocol):
+    """Bluetooth advertisement passed into discovery config-flow steps."""
+
+    name: str
+    address: str
 
 
 def _is_subzero_device(discovery_info: BluetoothServiceInfoBleak) -> bool:
