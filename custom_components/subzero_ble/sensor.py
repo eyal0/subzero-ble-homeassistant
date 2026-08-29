@@ -114,6 +114,7 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         name="Max Ice Start Time",
         icon="mdi:clock-start",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=lambda data: field_text(data, "max_ice_start_time"),
     ),
     SubZeroSensorEntityDescription(
@@ -121,6 +122,7 @@ SENSOR_DESCRIPTIONS: tuple[SubZeroSensorEntityDescription, ...] = (
         name="Max Ice End Time",
         icon="mdi:clock-end",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=lambda data: field_text(data, "max_ice_end_time"),
     ),
     SubZeroSensorEntityDescription(
