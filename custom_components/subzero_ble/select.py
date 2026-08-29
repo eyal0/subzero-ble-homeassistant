@@ -6,14 +6,11 @@ from dataclasses import dataclass
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
 from .const import (
     APPLIANCE_MODE_OPTIONS,
-    DOMAIN,
     HUMIDITY_OPTIONS,
     ICE_MAKER_OPTIONS,
 )
@@ -24,6 +21,9 @@ from .coordinator import (
     humidity_control,
     ice_maker_mode,
 )
+from .entity import SubZeroEntity
+
+PARALLEL_UPDATES = 1
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -75,9 +75,7 @@ async def async_setup_entry(
     )
 
 
-class SubZeroSelectEntity(
-    CoordinatorEntity[SubZeroDataUpdateCoordinator], SelectEntity
-):
+class SubZeroSelectEntity(SubZeroEntity, SelectEntity):
     """Writable grouped mode (ice maker or appliance)."""
 
     entity_description: SubZeroSelectEntityDescription
@@ -88,15 +86,9 @@ class SubZeroSelectEntity(
         description: SubZeroSelectEntityDescription,
         address: str,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, address, description.key)
         self.entity_description = description
-        self._attr_unique_id = f"{address}_{description.key}"
         self._attr_options = list(description.options or ())
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name="Sub-Zero Refrigerator",
-            manufacturer="Sub-Zero",
-        )
 
     @property
     def current_option(self) -> str | None:

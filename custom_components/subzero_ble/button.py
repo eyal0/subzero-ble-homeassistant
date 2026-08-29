@@ -4,13 +4,13 @@ from __future__ import annotations
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
-from .const import DOMAIN
 from .coordinator import SubZeroDataUpdateCoordinator
+from .entity import SubZeroEntity
+
+PARALLEL_UPDATES = 1
 
 DISPLAY_PIN = ButtonEntityDescription(
     key="display_pin",
@@ -32,21 +32,13 @@ async def async_setup_entry(
     )
 
 
-class SubZeroDisplayPinButton(
-    CoordinatorEntity[SubZeroDataUpdateCoordinator], ButtonEntity
-):
+class SubZeroDisplayPinButton(SubZeroEntity, ButtonEntity):
     """Button that asks the appliance to show its PIN on the display."""
 
     entity_description = DISPLAY_PIN
 
     def __init__(self, coordinator: SubZeroDataUpdateCoordinator, address: str) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{address}_{DISPLAY_PIN.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name="Sub-Zero Refrigerator",
-            manufacturer="Sub-Zero",
-        )
+        super().__init__(coordinator, address, DISPLAY_PIN.key)
 
     async def async_press(self) -> None:
         """Ask the appliance to show its PIN on the display."""

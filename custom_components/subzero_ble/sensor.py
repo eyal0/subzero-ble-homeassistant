@@ -17,12 +17,10 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
-from .const import CONNECTION_STATUSES, DOMAIN
+from .const import CONNECTION_STATUSES
 from .coordinator import (
     SubZeroData,
     SubZeroDataUpdateCoordinator,
@@ -35,6 +33,9 @@ from .coordinator import (
     notif_count,
     parse_uptime_seconds,
 )
+from .entity import SubZeroEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -187,7 +188,7 @@ async def async_setup_entry(
     )
 
 
-class SubZeroSensorEntity(CoordinatorEntity[SubZeroDataUpdateCoordinator], SensorEntity):
+class SubZeroSensorEntity(SubZeroEntity, SensorEntity):
     """Representation of a Sub-Zero sensor."""
 
     entity_description: SubZeroSensorEntityDescription
@@ -198,14 +199,8 @@ class SubZeroSensorEntity(CoordinatorEntity[SubZeroDataUpdateCoordinator], Senso
         description: SubZeroSensorEntityDescription,
         address: str,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, address, description.key)
         self.entity_description = description
-        self._attr_unique_id = f"{address}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name="Sub-Zero Refrigerator",
-            manufacturer="Sub-Zero",
-        )
 
     @property
     def native_value(self) -> float | int | str | None:
@@ -222,9 +217,7 @@ class SubZeroSensorEntity(CoordinatorEntity[SubZeroDataUpdateCoordinator], Senso
         return self.entity_description.attrs_fn(self.coordinator.data)
 
 
-class SubZeroConnectionSensor(
-    CoordinatorEntity[SubZeroDataUpdateCoordinator], SensorEntity
-):
+class SubZeroConnectionSensor(SubZeroEntity, SensorEntity):
     """BLE connection and pairing status; stays available when a poll fails."""
 
     _attr_name = "Connection Status"
@@ -236,13 +229,7 @@ class SubZeroConnectionSensor(
     def __init__(
         self, coordinator: SubZeroDataUpdateCoordinator, address: str
     ) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{address}_connection_status"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name="Sub-Zero Refrigerator",
-            manufacturer="Sub-Zero",
-        )
+        super().__init__(coordinator, address, "connection_status")
 
     @property
     def available(self) -> bool:

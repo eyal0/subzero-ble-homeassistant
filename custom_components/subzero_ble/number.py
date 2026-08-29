@@ -12,13 +12,13 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
-from .const import DOMAIN
 from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator
+from .entity import SubZeroEntity
+
+PARALLEL_UPDATES = 1
 
 # Wire values match the appliance BLE integers (Fahrenheit).
 FRIDGE_TEMP_MIN = 34
@@ -78,9 +78,7 @@ async def async_setup_entry(
     )
 
 
-class SubZeroNumberEntity(
-    CoordinatorEntity[SubZeroDataUpdateCoordinator], NumberEntity
-):
+class SubZeroNumberEntity(SubZeroEntity, NumberEntity):
     """Writable fridge or freezer setpoint."""
 
     entity_description: SubZeroNumberEntityDescription
@@ -91,14 +89,8 @@ class SubZeroNumberEntity(
         description: SubZeroNumberEntityDescription,
         address: str,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, address, description.key)
         self.entity_description = description
-        self._attr_unique_id = f"{address}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name="Sub-Zero Refrigerator",
-            manufacturer="Sub-Zero",
-        )
 
     @property
     def native_value(self) -> float | None:

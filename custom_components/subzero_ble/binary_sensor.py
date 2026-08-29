@@ -11,18 +11,18 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SubZeroConfigEntry
-from .const import DOMAIN
 from .coordinator import (
     SubZeroData,
     SubZeroDataUpdateCoordinator,
     field_bool,
     field_nonempty,
 )
+from .entity import SubZeroEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -129,9 +129,7 @@ async def async_setup_entry(
     )
 
 
-class SubZeroBinarySensorEntity(
-    CoordinatorEntity[SubZeroDataUpdateCoordinator], BinarySensorEntity
-):
+class SubZeroBinarySensorEntity(SubZeroEntity, BinarySensorEntity):
     """Representation of a Sub-Zero binary sensor."""
 
     entity_description: SubZeroBinarySensorEntityDescription
@@ -142,14 +140,8 @@ class SubZeroBinarySensorEntity(
         description: SubZeroBinarySensorEntityDescription,
         address: str,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, address, description.key)
         self.entity_description = description
-        self._attr_unique_id = f"{address}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name="Sub-Zero Refrigerator",
-            manufacturer="Sub-Zero",
-        )
 
     @property
     def is_on(self) -> bool | None:
