@@ -1,0 +1,6 @@
+pytest-cov
+pytest-homeassistant-custom-component
+# bluetooth → usb is imported with the integration; HA core does not
+# install these with the homeassistant package.
+aiousbwatcher
+serialx
