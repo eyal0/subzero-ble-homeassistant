@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from bleak.backends.characteristic import BleakGATTCharacteristic
@@ -360,7 +360,7 @@ class SubZeroBleClient:
             await self._ensure_connected(require_pair=True)
             await self._write_set(key, value)
 
-    async def async_set_properties(self, params: dict[str, object]) -> None:
+    async def async_set_properties(self, params: Mapping[str, object]) -> None:
         """Write several properties on D5, spaced so the appliance keeps each set."""
         if not self._pin:
             raise BleakError(
