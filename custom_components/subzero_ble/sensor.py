@@ -225,6 +225,7 @@ class SubZeroConnectionSensor(SubZeroEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = list(CONNECTION_STATUSES)
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self, coordinator: SubZeroDataUpdateCoordinator, address: str
