@@ -7,8 +7,8 @@ alwaysApply: true
 
 Follow `AGENTS.md`.
 
-Do not commit, push, or merge to `main`. Finish every change with a pull request from **this checkout**: commit, `git push`, `gh pr create`. Leave the PR open for review.
+Do not commit, push, or merge to `main`. Finish every change by committing on a feature branch, then **printing** `git push` and `gh pr create` for the user. Leave the PR open for review.
 
-Do not spawn a Cursor cloud agent to re-commit the same change and open the PR. If `git push` or `gh` fails here, give the user the commands to run locally.
+Never run `git push` or `gh` from this checkout. They fail in the Cursor sandbox; do not retry. Do not spawn a Cursor cloud agent to push or open the PR.
 
 The GitHub PR branch name must match the local branch name (`git push` with `push.autosetupremote` does that).
