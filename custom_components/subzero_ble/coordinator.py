@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 import json
 import logging
-from typing import Any, NoReturn, TypeVar
+from typing import Any, NoReturn, TypedDict, TypeVar
 
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
@@ -43,6 +43,14 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
+
+
+class _DeviceInfoUpdates(TypedDict, total=False):
+    """Keyword arguments for DeviceRegistry.async_update_device."""
+
+    model: str
+    serial_number: str
+    sw_version: str
 
 
 @dataclass
@@ -471,7 +479,7 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         device = registry.async_get_device(identifiers={(DOMAIN, self.address)})
         if device is None:
             return
-        updates: dict[str, str] = {}
+        updates: _DeviceInfoUpdates = {}
         if model := data.fields.get("appliance_model"):
             updates["model"] = str(model)
         if serial := data.fields.get("appliance_serial"):
