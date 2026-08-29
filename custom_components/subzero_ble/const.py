@@ -50,6 +50,8 @@ DISPLAY_PIN_ACK_TIMEOUT = 3.0
 DISPLAY_PIN_RETRY_TIMEOUT = 120.0
 MAX_FRAME_BYTES = 4096
 UPDATE_INTERVAL_SECONDS = 10
+# Failed polls retry immediately this many times before entities go unavailable.
+POLL_ATTEMPTS = 3
 # ESPHome found back-to-back D5 sets can drop; space grouped flag writes.
 SET_WRITE_GAP_SECONDS = 0.75
 
