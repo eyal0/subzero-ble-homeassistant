@@ -53,6 +53,6 @@ jobs:
       - name: Run config flow tests
         run: >
           pytest tests
-          --cov=custom_components/subzero_ble/config_flow.py
+          --cov=custom_components.subzero_ble.config_flow
           --cov-report=term-missing
           --cov-fail-under=100

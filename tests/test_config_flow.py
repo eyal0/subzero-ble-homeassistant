@@ -210,17 +210,14 @@ async def test_bluetooth_already_in_progress(hass: HomeAssistant) -> None:
     assert result["reason"] == "already_in_progress"
 
 
-async def test_bluetooth_title_fallback(hass: HomeAssistant) -> None:
-    """Test the confirm title when the advertisement has no local name."""
-    result = await _start_bluetooth(hass, _info(name="", address=ADDRESS))
+async def test_bluetooth_title_when_name_matches_address(
+    hass: HomeAssistant,
+) -> None:
+    """Test confirm copy when the local name is the same as the address."""
+    discovery = _info(name="SZGTEST", address="SZGTEST")
+    result = await _start_bluetooth(hass, discovery)
     assert result["type"] is FlowResultType.FORM
-    assert result["description_placeholders"]["name"] == f"Sub-Zero ({ADDRESS})"
-
-
-async def test_bluetooth_title_when_name_is_address(hass: HomeAssistant) -> None:
-    """Test the confirm title when the local name is the MAC."""
-    result = await _start_bluetooth(hass, _info(name=ADDRESS, address=ADDRESS))
-    assert result["description_placeholders"]["name"] == f"Sub-Zero ({ADDRESS})"
+    assert result["description_placeholders"]["name"] == "Sub-Zero (SZGTEST)"
 
 
 async def test_pin_invalid_then_success(
@@ -310,7 +307,7 @@ async def test_pin_cannot_connect_then_success(
     """Test a missing appliance can be retried once it is in range."""
     with patch(
         "custom_components.subzero_ble.config_flow.bluetooth.async_ble_device_from_address",
-        side_effect=[None, None, MagicMock()],
+        side_effect=[None, None, None, MagicMock()],
     ):
         result = await _start_user(hass)
         result = await hass.config_entries.flow.async_configure(
