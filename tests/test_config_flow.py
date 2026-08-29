@@ -273,13 +273,13 @@ async def test_pin_invalid_auth_then_success(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_pin_pairing_error_maps_to_invalid_auth(
+async def test_pin_pairing_error_maps_to_cannot_connect(
     hass: HomeAssistant,
     mock_setup_entry: AsyncMock,
     mock_ble_client: MagicMock,
     mock_ble_device: MagicMock,
 ) -> None:
-    """Test a pairing failure is shown as invalid_auth, then succeeds."""
+    """Test a pairing infrastructure failure is shown as cannot_connect, then succeeds."""
     mock_ble_client.async_verify_pin.side_effect = [
         SubZeroPairingError("pair failed"),
         None,
@@ -291,7 +291,7 @@ async def test_pin_pairing_error_maps_to_invalid_auth(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_PIN: PIN}
     )
-    assert result["errors"] == {"base": "invalid_auth"}
+    assert result["errors"] == {"base": "cannot_connect"}
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_PIN: PIN}
     )
@@ -587,6 +587,25 @@ async def test_reauth_cannot_connect_restores_poll_interval(
     assert result["reason"] == "reauth_successful"
 
 
+async def test_options_add_pin_pairing_error(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    mock_ble_client: MagicMock,
+    mock_ble_device: MagicMock,
+) -> None:
+    """Test Configure after diagnostic-only setup does not treat a pairing miss as a bad PIN."""
+    entry = await add_entry(hass)
+    mock_ble_client.async_verify_pin.side_effect = SubZeroPairingError(
+        "Cannot pair: BlueZ device path is unavailable on this adapter"
+    )
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PIN: PIN}
+    )
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert CONF_PIN not in entry.data
+
+
 async def test_options_update_pin(
     hass: HomeAssistant,
     mock_setup_entry: AsyncMock,
@@ -753,7 +772,7 @@ async def test_title_helpers() -> None:
     assert _title(_info()) == DEVICE_NAME
     assert _title(_info(name="")) == f"Sub-Zero ({ADDRESS})"
     assert _pin_verify_error(SubZeroInvalidPin("bad")) == "invalid_auth"
-    assert _pin_verify_error(SubZeroPairingError("pair")) == "invalid_auth"
+    assert _pin_verify_error(SubZeroPairingError("pair")) == "cannot_connect"
     assert _pin_verify_error(BleakError("lost")) == "cannot_connect"
 
 
