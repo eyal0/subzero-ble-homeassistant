@@ -432,6 +432,35 @@ async def test_pin_display_pin_cancelled_on_submit(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
+async def test_pin_invalid_keeps_show_pin_running(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    mock_ble_client: MagicMock,
+    mock_ble_device: MagicMock,
+) -> None:
+    """Test a malformed PIN does not restart an in-flight Show PIN loop."""
+
+    async def _hang() -> None:
+        await asyncio.Event().wait()
+
+    mock_ble_client.async_display_pin.side_effect = _hang
+    result = await _start_user(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_ADDRESS: ADDRESS}
+    )
+    await asyncio.sleep(0)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PIN: "12"}
+    )
+    assert result["errors"] == {CONF_PIN: "invalid_pin"}
+    assert mock_ble_client.async_display_pin.call_count == 1
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PIN: PIN}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
 async def test_pin_form_without_name(
     hass: HomeAssistant, mock_ble_device: MagicMock, mock_ble_client: MagicMock
 ) -> None:
@@ -616,6 +645,34 @@ async def test_options_invalid_then_success(
     )
     assert result["errors"] == {"base": "cannot_connect"}
 
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PIN: "654321"}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_PIN] == "654321"
+
+
+async def test_options_invalid_keeps_show_pin_running(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    mock_ble_client: MagicMock,
+    mock_ble_device: MagicMock,
+) -> None:
+    """Test Configure does not restart Show PIN after a malformed PIN."""
+
+    async def _hang() -> None:
+        await asyncio.Event().wait()
+
+    entry = await add_entry(hass, **{CONF_PIN: PIN})
+    mock_ble_client.async_display_pin.side_effect = _hang
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    await asyncio.sleep(0)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PIN: "nope"}
+    )
+    assert result["errors"] == {CONF_PIN: "invalid_pin"}
+    assert mock_ble_client.async_display_pin.call_count == 1
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_PIN: "654321"}
     )
