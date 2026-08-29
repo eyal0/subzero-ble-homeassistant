@@ -12,9 +12,11 @@ This project is not affiliated with or endorsed by Sub-Zero Group, Inc.
 
 ## Requirements
 
-- Home Assistant with a Bluetooth adapter on the **same host** as Home Assistant (`bluetooth_adapters`)
+- Home Assistant with a Bluetooth adapter on the **same host** as Home Assistant (`bluetooth_adapters`). **Bluetooth proxies are not supported** (ESPHome Bluetooth Proxy, Shelly, and similar remote adapters).
 - A Sub-Zero Group appliance that advertises as `SZG…` with Bluetooth enabled
 - **Linux / BlueZ** for pairing (Home Assistant OS, Supervised, or Container on Linux). The passkey agent is BlueZ-specific.
+
+If the fridge is only in range of a Bluetooth proxy, use [JonGilmore/esphome-subzero-ble](https://github.com/JonGilmore/esphome-subzero-ble) instead.
 
 The appliance allows **one BLE connection at a time**. Close the official Sub-Zero Group Owner app (and any ESPHome client) before using this integration, or the link will drop.
 
@@ -151,6 +153,7 @@ The protocol and many other fridge models are documented in [JonGilmore/esphome-
 
 ## Known limitations
 
+- **No Bluetooth proxies.** The adapter must be on the Home Assistant host. For proxy-based setups, use [esphome-subzero-ble](https://github.com/JonGilmore/esphome-subzero-ble).
 - **One BLE client.** Phone app, ESPHome, and this integration cannot share the connection.
 - **Pairing is BlueZ-only.** Home Assistant Core on macOS or Windows will not run the passkey agent used here.
 - **Setpoint writes** need a PIN, a bonded link, and the encrypted control channel. The appliance may acknowledge a `set` and still not apply it on some models.
@@ -160,7 +163,7 @@ The protocol and many other fridge models are documented in [JonGilmore/esphome-
 
 | Symptom | What to try |
 | --- | --- |
-| No devices found | Enable Bluetooth on the appliance, keep it in range of the HA adapter, and disconnect the phone app. |
+| No devices found | Enable Bluetooth on the appliance, keep it in range of the **HA host adapter** (not a proxy), and disconnect the phone app. For proxy-only coverage, use [esphome-subzero-ble](https://github.com/JonGilmore/esphome-subzero-ble). |
 | Doors work, nothing else | Add the 6-digit PIN under **Configure**. |
 | `status 302` / invalid PIN | The PIN rotated. Complete **Reauthenticate** (Show PIN + new code), or save it under **Configure**. |
 | Disconnect during poll | Usually a single-slot or idle drop. If it repeats, make sure nothing else is connected. |
