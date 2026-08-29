@@ -61,7 +61,7 @@ class PairingAgentSession:
     async def start(self, bus: Any | None = None) -> None:
         """Export the agent and register it with BlueZ."""
         from dbus_fast import BusType
-        from dbus_fast.aio import MessageBus
+        from dbus_fast.aio.message_bus import MessageBus
         from dbus_fast.errors import DBusError
         from dbus_fast.service import ServiceInterface, method
 
@@ -192,7 +192,7 @@ async def async_device_is_paired(
     owns_bus = False
     if bus is None:
         from dbus_fast import BusType
-        from dbus_fast.aio import MessageBus
+        from dbus_fast.aio.message_bus import MessageBus
 
         bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
         owns_bus = True
