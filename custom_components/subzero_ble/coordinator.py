@@ -37,6 +37,8 @@ from .const import (
     ICE_MAKER_NIGHT_ICE,
     ICE_MAKER_NORMAL,
     ICE_MAKER_OFF,
+    POLL_ATTEMPTS,
+    RECONNECT_GAP_SECONDS,
     UPDATE_INTERVAL_SECONDS,
 )
 
@@ -498,6 +500,32 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         if self.client is not None:
             await self.client.async_disconnect()
 
+    async def _async_poll_with_retries(self) -> SubZeroData:
+        """Poll, retrying transient BLE errors immediately before going unavailable."""
+        assert self.client is not None
+        last_err: Exception | None = None
+        for attempt in range(1, POLL_ATTEMPTS + 1):
+            try:
+                return await self.client.poll_state()
+            except SubZeroInvalidPin:
+                raise
+            except Exception as err:
+                last_err = err
+                await self.client.async_disconnect()
+                if attempt == POLL_ATTEMPTS:
+                    break
+                _LOGGER.warning(
+                    "Sub-Zero poll failed for %s (attempt %s/%s); retrying: %s",
+                    self.address,
+                    attempt,
+                    POLL_ATTEMPTS,
+                    err,
+                )
+                await asyncio.sleep(RECONNECT_GAP_SECONDS)
+        assert last_err is not None
+        self._set_connection_status(CONNECTION_DISCONNECTED)
+        raise UpdateFailed(f"BLE communication error: {last_err}") from last_err
+
     async def _async_update_data(self) -> SubZeroData:
         _LOGGER.info("Starting Sub-Zero update for %s", self.address)
         ble_device = bluetooth.async_ble_device_from_address(
@@ -520,17 +548,12 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
                 await self.client.async_disconnect()
 
         try:
-            parsed = await self.client.poll_state()
+            parsed = await self._async_poll_with_retries()
         except SubZeroInvalidPin as err:
             if self.client is not None:
                 await self.client.async_disconnect()
             self._set_connection_status(CONNECTION_INVALID_PIN)
             raise ConfigEntryAuthFailed(str(err)) from err
-        except Exception as err:
-            if self.client is not None:
-                await self.client.async_disconnect()
-            self._set_connection_status(CONNECTION_DISCONNECTED)
-            raise UpdateFailed(f"BLE communication error: {err}") from err
 
         self._set_connection_status(self.client.connection_status())
 
