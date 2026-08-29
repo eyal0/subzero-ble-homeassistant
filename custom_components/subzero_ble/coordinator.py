@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 import json
 import logging
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypeVar
 
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
@@ -41,6 +41,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 
 @dataclass
@@ -89,7 +91,8 @@ class SubZeroData:
         )
 
 
-def _keep(new: object, old: object) -> object:
+def _keep(new: _T | None, old: _T | None) -> _T | None:
+    """Prefer the update value when the payload included it."""
     return new if new is not None else old
 
 
