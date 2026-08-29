@@ -8,7 +8,7 @@
       "reauth_successful": "Re-authentication was successful"
     },
     "error": {
-      "cannot_connect": "Could not reach the appliance to check the PIN. Make sure it is nearby and Bluetooth is on, then try again.",
+      "cannot_connect": "Could not pair with the appliance to check the PIN. Make sure it is nearby, Bluetooth is on, and the official app is closed, then try again.",
       "invalid_pin": "PIN must be exactly 6 digits",
       "invalid_auth": "That PIN was not accepted. Check the code on the appliance display and try again."
     },
@@ -41,7 +41,7 @@
   },
   "options": {
     "error": {
-      "cannot_connect": "Could not reach the appliance to check the PIN. Make sure it is nearby and Bluetooth is on, then try again.",
+      "cannot_connect": "Could not pair with the appliance to check the PIN. Make sure it is nearby, Bluetooth is on, and the official app is closed, then try again.",
       "invalid_pin": "PIN must be exactly 6 digits",
       "invalid_auth": "That PIN was not accepted. Check the code on the appliance display and try again."
     },

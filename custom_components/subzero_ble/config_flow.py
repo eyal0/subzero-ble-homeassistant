@@ -110,9 +110,12 @@ async def _async_verify_pin(hass: HomeAssistant, address: str, pin: str) -> None
 
 def _pin_verify_error(err: BaseException) -> str:
     """Map a verify failure to a config-flow error key. Do not log the PIN."""
-    if isinstance(err, (SubZeroInvalidPin, SubZeroPairingError)):
+    if isinstance(err, SubZeroInvalidPin):
         _LOGGER.warning("Appliance rejected PIN: %s", err)
         return "invalid_auth"
+    if isinstance(err, SubZeroPairingError):
+        _LOGGER.warning("Could not complete BLE pairing: %s", err)
+        return "cannot_connect"
     _LOGGER.warning("Could not verify PIN: %s", err)
     return "cannot_connect"
 

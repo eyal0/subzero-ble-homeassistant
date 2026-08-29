@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 from bleak.backends.device import BLEDevice
@@ -13,34 +14,94 @@ from .const import PAIR_TIMEOUT
 _LOGGER = logging.getLogger(__name__)
 
 AGENT_PATH = "/com/subzero_ble/agent"
+_BLUEZ_PATH_PREFIX = "/org/bluez/"
+_WRAPPER_ATTRS = ("_backend", "_client", "_bleak_client")
 
 
 class SubZeroPairingError(BleakError):
     """Raised when BLE pairing fails."""
 
 
-def bleak_message_bus(client: object | None) -> Any | None:
-    """Return the dbus-fast MessageBus used by a connected Bleak client."""
-    current: object | None = client
+def _iter_bleak_wrappers(root: object | None) -> Iterator[object]:
+    """Walk Bleak/HA client wrappers to the platform backend."""
+    current = root
     seen: set[int] = set()
     while current is not None and id(current) not in seen:
         seen.add(id(current))
-        bus = getattr(current, "_bus", None)
+        yield current
+        nxt = None
+        for attr in _WRAPPER_ATTRS:
+            candidate = getattr(current, attr, None)
+            if candidate is None or callable(candidate):
+                continue
+            nxt = candidate
+            break
+        current = nxt
+
+
+def bleak_message_bus(client: object | None) -> Any | None:
+    """Return the dbus-fast MessageBus used by a connected Bleak client."""
+    for obj in _iter_bleak_wrappers(client):
+        bus = getattr(obj, "_bus", None)
         if bus is not None and callable(getattr(bus, "export", None)):
             return bus
-        current = getattr(current, "_backend", None) or getattr(
-            current, "_client", None
-        )
     return None
 
 
-def _device_path(ble_device: BLEDevice) -> str | None:
-    """Return the BlueZ object path for a Bleak device, if available."""
-    details = ble_device.details
-    if isinstance(details, dict):
-        path = details.get("path")
-        if isinstance(path, str):
+def _coerce_bluez_path(value: object) -> str | None:
+    """Return a BlueZ device object path, or None if value is not one."""
+    if value is None:
+        return None
+    text = value if isinstance(value, str) else str(value)
+    if text.startswith(_BLUEZ_PATH_PREFIX) and "/dev_" in text:
+        return text
+    return None
+
+
+def _path_from_details(details: object) -> str | None:
+    """Read a BlueZ path from BLEDevice.details in the shapes HA/Bleak use."""
+    if (path := _coerce_bluez_path(details)) is not None:
+        return path
+    raw: object = None
+    if isinstance(details, Mapping):
+        raw = details.get("path")
+    else:
+        getter = getattr(details, "get", None)
+        if callable(getter):
+            try:
+                raw = getter("path")
+            except Exception:
+                raw = None
+        if raw is None:
+            raw = getattr(details, "path", None)
+        if raw is None:
+            try:
+                raw = details["path"]  # type: ignore[index]
+            except Exception:
+                raw = None
+    return _coerce_bluez_path(raw)
+
+
+def _device_path(
+    ble_device: BLEDevice | None, client: object | None = None
+) -> str | None:
+    """Return the BlueZ object path from the scanner device or connected client.
+
+    Home Assistant often freezes ``BLEDevice.details`` as a mapping (not a
+    plain dict) or keeps the path only on the connected BlueZ backend after
+    ``HaBleakClientWrapper`` picks an adapter. Pairing used to require a dict
+    ``details['path']`` and aborted before ``client.pair()``.
+    """
+    if ble_device is not None:
+        if path := _path_from_details(getattr(ble_device, "details", None)):
             return path
+    for obj in _iter_bleak_wrappers(client):
+        if path := _coerce_bluez_path(getattr(obj, "_device_path", None)):
+            return path
+        connected = getattr(obj, "_connected_device", None)
+        if connected is not None:
+            if path := _path_from_details(getattr(connected, "details", None)):
+                return path
     return None
 
 
@@ -185,7 +246,7 @@ async def async_device_is_paired(
     ble_device: BLEDevice, client: Any | None = None
 ) -> bool:
     """Return True if BlueZ already has a bond for this appliance."""
-    device_path = _device_path(ble_device)
+    device_path = _device_path(ble_device, client)
     if device_path is None:
         return False
     bus = bleak_message_bus(client)
@@ -228,8 +289,9 @@ async def async_pair_with_passkey(
     Return True if a new SMP pairing completed (the ATT link should reconnect).
     Return False if a bond already existed.
     """
-    device_path = _device_path(ble_device)
-    if device_path is None:
+    device_path = _device_path(ble_device, client)
+    can_pair = client is not None and hasattr(client, "pair")
+    if device_path is None and not can_pair:
         raise SubZeroPairingError(
             "Cannot pair: BlueZ device path is unavailable on this adapter"
         )
@@ -253,8 +315,12 @@ async def async_pair_with_passkey(
         _LOGGER.info("Starting BLE passkey pairing with %s", ble_device.address)
         if client is not None and hasattr(client, "pair"):
             await asyncio.wait_for(client.pair(), timeout=PAIR_TIMEOUT)
-        else:
+        elif device_path is not None:
             await _pair_via_device_interface(session._bus, device_path)
+        else:
+            raise SubZeroPairingError(
+                "Cannot pair: BlueZ device path is unavailable on this adapter"
+            )
     except TimeoutError as err:
         raise SubZeroPairingError(
             "Timed out waiting for BLE pairing. "
