@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.subzero_ble.const import CONF_PIN, DOMAIN
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
 
@@ -15,6 +14,9 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 ADDRESS = "AA:BB:CC:DD:EE:FF"
 PIN = "123456"
 DEVICE_NAME = "SZG DEU2450C"
+DOMAIN = "subzero_ble"
+CONF_PIN = "pin"
+
 
 
 @pytest.fixture(autouse=True)
