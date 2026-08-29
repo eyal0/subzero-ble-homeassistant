@@ -54,9 +54,8 @@ def _pin_schema(default: str | None = None, *, required: bool = False) -> vol.Sc
     )
     if required:
         return vol.Schema({vol.Required(CONF_PIN): pin_selector})
-    return vol.Schema(
-        {vol.Optional(CONF_PIN, default=default or ""): pin_selector}
-    )
+    pin_default: Any = default or ""
+    return vol.Schema({vol.Optional(CONF_PIN, default=pin_default): pin_selector})
 
 
 async def _async_start_standalone_display_pin(
