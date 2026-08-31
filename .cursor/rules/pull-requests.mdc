@@ -7,7 +7,7 @@ alwaysApply: true
 
 Follow `AGENTS.md`.
 
-Do not commit, push, or merge to `main`. Finish every change by committing on a feature branch, then **printing** `git push` and `gh pr create` for the user. Leave the PR open for review.
+Do not commit, push, or merge to `main`. Finish every change by committing on a feature branch, then **printing** fish `git push` and `gh pr create` for the user. Leave the PR open for review.
 
 Never run `git push` or `gh` from this checkout. They fail in the Cursor sandbox; do not retry. Do not spawn a Cursor cloud agent to push or open the PR.
 
