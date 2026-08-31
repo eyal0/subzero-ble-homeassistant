@@ -35,8 +35,9 @@ PIN_PATTERN = re.compile(r"^\d{6}$")
 POLL_TIMEOUT = 15.0
 SUBSCRIBE_TIMEOUT = 5.0
 CONNECT_TIMEOUT = 30.0
-# BlueZ needs a beat after connect before CCCD writes, especially on a
-# reconnect that immediately follows Pair() on this one-connection appliance.
+# Pause after GATT connect before Pair() or CCCD writes. BlueZ is not ready
+# immediately, especially on a reconnect that follows Pair() on this
+# one-connection appliance.
 LINK_SETTLE_SECONDS = 0.4
 # The appliance allows one BLE connection; wait for the slot after we drop it
 # so the follow-up connect can encrypt with the stored bond.

@@ -165,6 +165,13 @@ class SubZeroBleClient:
         if self._on_disconnect:
             self._on_disconnect()
 
+    def _require_connected(self) -> BleakClientWithServiceCache:
+        """Return the live GATT client, or raise if the appliance dropped the link."""
+        client = self._client
+        if client is None or not client.is_connected:
+            raise BleakError("Sub-Zero disconnected")
+        return client
+
     def _notification_handler(
         self, characteristic: BleakGATTCharacteristic, data: bytearray
     ) -> None:
@@ -504,6 +511,8 @@ class SubZeroBleClient:
             getattr(self._ble_device, "rssi", None),
         )
         await asyncio.sleep(LINK_SETTLE_SECONDS)
+        # The disconnect callback may have cleared `_client` during settle.
+        self._require_connected()
         if self._pin:
             try:
                 await self._ensure_paired()
@@ -530,9 +539,9 @@ class SubZeroBleClient:
 
     async def _ensure_paired(self) -> bool:
         """Pair if needed. Return True when a new SMP pairing completed."""
-        assert self._client is not None
+        client = self._require_connected()
         assert self._pin is not None
-        if await async_device_is_paired(self._ble_device, self._client):
+        if await async_device_is_paired(self._ble_device, client):
             _LOGGER.info(
                 "Already bonded with %s; skipping Pair()",
                 self._ble_device.address,
@@ -540,11 +549,11 @@ class SubZeroBleClient:
             return False
         if self._pairing is None:
             self._pairing = PairingAgentSession(self._pin)
-            await self._pairing.start(bleak_message_bus(self._client))
+            await self._pairing.start(bleak_message_bus(client))
         return await async_pair_with_passkey(
             self._ble_device,
             self._pin,
-            client=self._client,
+            client=client,
             session=self._pairing,
         )
 
@@ -562,10 +571,10 @@ class SubZeroBleClient:
 
     async def _subscribe_and_unlock(self) -> None:
         """Subscribe to D7 (and D5/D6 after a PIN) and unlock encrypted channels."""
-        assert self._client is not None
-        d7 = _characteristic_by_uuid(self._client, CHAR_D7_UUID)
-        d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
-        d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
+        client = self._require_connected()
+        d7 = _characteristic_by_uuid(client, CHAR_D7_UUID)
+        d6 = _characteristic_by_uuid(client, CHAR_D6_UUID)
+        d5 = _characteristic_by_uuid(client, CHAR_D5_UUID)
         if d7 is not None:
             await self._subscribe(d7)
 
@@ -576,8 +585,9 @@ class SubZeroBleClient:
                     "D5/D6 need an encrypted ATT link; encrypting the existing bond"
                 )
                 await self._encrypt_existing_bond()
-                d5 = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
-                d6 = _characteristic_by_uuid(self._client, CHAR_D6_UUID)
+                client = self._require_connected()
+                d5 = _characteristic_by_uuid(client, CHAR_D5_UUID)
+                d6 = _characteristic_by_uuid(client, CHAR_D6_UUID)
                 await self._subscribe_encrypted_channels(d5, d6)
             if d6 is not None and str(d6.uuid).lower() in self._subscribed:
                 self._poll_channel = d6
