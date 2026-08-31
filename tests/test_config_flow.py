@@ -7,6 +7,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from bleak.exc import BleakError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -489,9 +490,15 @@ async def test_reauth_success(
     mock_setup_entry: AsyncMock,
     mock_ble_client: MagicMock,
     mock_ble_device: MagicMock,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Test reauth stores a new PIN and aborts successfully."""
+    """Test reauth stores a new PIN and leaves reload to the update listener."""
     entry = await add_entry(hass, **{CONF_PIN: "000000"})
+
+    async def _listener(_hass: HomeAssistant, _entry: MockConfigEntry) -> None:
+        return None
+
+    entry.add_update_listener(_listener)
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
@@ -507,6 +514,10 @@ async def test_reauth_success(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert entry.data[CONF_PIN] == PIN
+    assert (
+        "has an update listener and should use it for scheduling a reload"
+        not in caplog.text
+    )
 
 
 async def test_reauth_invalid_then_success(
