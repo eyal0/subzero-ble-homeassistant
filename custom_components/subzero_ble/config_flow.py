@@ -192,7 +192,7 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="not_supported")
 
         await self.async_set_unique_id(discovery_info.address)
-        self._abort_if_unique_id_configured()
+        self._abort_if_unique_id_configured(reload_on_update=False)
 
         self._discovery_info = discovery_info
         self.context["title_placeholders"] = {"name": _title(discovery_info)}
@@ -226,7 +226,7 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address, raise_on_progress=False)
-            self._abort_if_unique_id_configured()
+            self._abort_if_unique_id_configured(reload_on_update=False)
             discovery_info = self._discovered_devices[address]
             self._address = address
             self._name = _title(discovery_info)
@@ -357,7 +357,7 @@ class SubZeroBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                         if coordinator is not None:
                             coordinator.update_interval = saved_interval
                     else:
-                        return self.async_update_reload_and_abort(
+                        return self.async_update_and_abort(
                             reauth_entry,
                             data_updates={CONF_PIN: pin},
                         )
