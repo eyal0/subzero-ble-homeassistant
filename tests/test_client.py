@@ -50,6 +50,8 @@ except ModuleNotFoundError:
     sys.modules["custom_components.subzero_ble"] = _pkg
     from custom_components.subzero_ble.client import SubZeroBleClient
 
+from custom_components.subzero_ble.const import CHAR_D5_UUID, CHAR_D7_UUID
+
 ADDRESS = "00:06:80:2D:15:F5"
 PIN = "123456"
 
@@ -63,6 +65,23 @@ def _connected_gatt_client() -> MagicMock:
     client.is_connected = True
     client.services = []
     client.mtu_size = 23
+    return client
+
+
+def _char(uuid: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        uuid=uuid,
+        properties=["read", "write", "indicate"],
+        handle=1,
+        descriptors=[],
+    )
+
+
+def _gatt_with_channels(*uuids: str) -> MagicMock:
+    client = _connected_gatt_client()
+    client.services = [
+        SimpleNamespace(characteristics=[_char(uuid) for uuid in uuids])
+    ]
     return client
 
 
@@ -115,3 +134,79 @@ class ConnectSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             any("Disconnected from Sub-Zero" in line for line in logs.output)
         )
+
+
+class WriteDisplayPinTests(unittest.IsolatedAsyncioTestCase):
+    def _client_with_channels(self, *uuids: str) -> SubZeroBleClient:
+        client = SubZeroBleClient(_ble_device())
+        client._client = _gatt_with_channels(*uuids)
+        return client
+
+    async def test_d7_accepted_skips_d5(self) -> None:
+        """Unauthenticated D7 is enough; do not touch encrypted D5."""
+        client = self._client_with_channels(CHAR_D7_UUID, CHAR_D5_UUID)
+        with patch.object(
+            client, "_try_display_pin_on_channel", new_callable=AsyncMock
+        ) as mock_try:
+            mock_try.return_value = "accepted"
+            await client._write_display_pin(20)
+        self.assertEqual(mock_try.await_count, 1)
+        self.assertEqual(
+            str(mock_try.await_args.args[0].uuid).lower(), CHAR_D7_UUID
+        )
+
+    async def test_d7_rejected_falls_through_to_d5(self) -> None:
+        """If D7 does not accept the verb, try control channel D5."""
+        client = self._client_with_channels(CHAR_D7_UUID, CHAR_D5_UUID)
+        with patch.object(
+            client, "_try_display_pin_on_channel", new_callable=AsyncMock
+        ) as mock_try:
+            mock_try.side_effect = ["rejected", "accepted"]
+            await client._write_display_pin(20)
+        self.assertEqual(mock_try.await_count, 2)
+        self.assertEqual(
+            [str(call.args[0].uuid).lower() for call in mock_try.await_args_list],
+            [CHAR_D7_UUID, CHAR_D5_UUID],
+        )
+
+    async def test_d7_not_paired_falls_through_to_d5(self) -> None:
+        """A D7 write error must not skip the D5 attempt."""
+        client = self._client_with_channels(CHAR_D7_UUID, CHAR_D5_UUID)
+        with patch.object(
+            client, "_try_display_pin_on_channel", new_callable=AsyncMock
+        ) as mock_try:
+            mock_try.side_effect = [
+                BleakError("[org.bluez.Error.NotPermitted] Not paired"),
+                "accepted",
+            ]
+            await client._write_display_pin(20)
+        self.assertEqual(mock_try.await_count, 2)
+
+    async def test_missing_d7_uses_d5(self) -> None:
+        """Fridge-pattern GATT without D7 still shows the PIN on D5."""
+        client = self._client_with_channels(CHAR_D5_UUID)
+        with patch.object(
+            client, "_try_display_pin_on_channel", new_callable=AsyncMock
+        ) as mock_try:
+            mock_try.return_value = "accepted"
+            await client._write_display_pin(20)
+        self.assertEqual(mock_try.await_count, 1)
+        self.assertEqual(
+            str(mock_try.await_args.args[0].uuid).lower(), CHAR_D5_UUID
+        )
+
+    async def test_d7_no_ack_then_d5_not_paired_raises(self) -> None:
+        """IT30CI unpaired: D7 silent, D5 Not paired — raise the D5 error."""
+        client = self._client_with_channels(CHAR_D7_UUID, CHAR_D5_UUID)
+        not_paired = BleakError("[org.bluez.Error.NotPermitted] Not paired")
+        with patch.object(
+            client, "_try_display_pin_on_channel", new_callable=AsyncMock
+        ) as mock_try:
+            mock_try.side_effect = ["wrote", not_paired]
+            with self.assertRaisesRegex(BleakError, "Not paired"):
+                await client._write_display_pin(20)
+
+    async def test_neither_channel_in_gatt_table(self) -> None:
+        client = self._client_with_channels()
+        with self.assertRaisesRegex(BleakError, "D7 and D5 are not in the GATT table"):
+            await client._write_display_pin(20)

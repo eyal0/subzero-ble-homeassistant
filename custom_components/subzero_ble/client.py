@@ -251,10 +251,11 @@ class SubZeroBleClient:
     async def async_display_pin(
         self, duration: int = DISPLAY_PIN_DURATION
     ) -> None:
-        """Ask the appliance to show its PIN on D5, retrying until it accepts.
+        """Ask the appliance to show its PIN, retrying until it accepts.
 
-        The fridge may reject display_pin when the door is closed; retry every
-        few seconds so the user can open a door.
+        Tries open D7 first, then encrypted D5. The fridge may reject
+        display_pin when the door is closed; retry every few seconds so the
+        user can open a door.
         """
         loop = asyncio.get_running_loop()
         deadline = loop.time() + DISPLAY_PIN_RETRY_TIMEOUT
@@ -292,20 +293,38 @@ class SubZeroBleClient:
                 await asyncio.sleep(min(DISPLAY_PIN_RETRY_SECONDS, remaining))
 
     async def _write_display_pin(self, duration: int) -> None:
-        """Write display_pin on D5."""
+        """Write display_pin on open D7 first, then encrypted D5."""
         assert self._client is not None
-        channel = _characteristic_by_uuid(self._client, CHAR_D5_UUID)
-        if channel is None:
-            raise BleakError("D5 is not in the GATT table")
-        result = await self._try_display_pin_on_channel(
-            channel, display_pin_command(duration), duration
-        )
-        if result == "accepted":
-            _LOGGER.info("display_pin accepted on D5; watch the appliance display")
-            return
-        if result == "rejected":
-            raise BleakError("display_pin was not accepted on D5")
-        raise BleakError("display_pin was written to D5 but no status 0 ack")
+        command = display_pin_command(duration)
+        last_error: BleakError | None = None
+        for uuid, name in ((CHAR_D7_UUID, "D7"), (CHAR_D5_UUID, "D5")):
+            channel = _characteristic_by_uuid(self._client, uuid)
+            if channel is None:
+                _LOGGER.info("%s is not in the GATT table; skipping display_pin", name)
+                continue
+            try:
+                result = await self._try_display_pin_on_channel(
+                    channel, command, duration
+                )
+            except BleakError as err:
+                _LOGGER.info("display_pin on %s failed (%s)", name, err)
+                last_error = err
+                continue
+            if result == "accepted":
+                _LOGGER.info(
+                    "display_pin accepted on %s; watch the appliance display", name
+                )
+                return
+            if result == "rejected":
+                last_error = BleakError(f"display_pin was not accepted on {name}")
+            else:
+                last_error = BleakError(
+                    f"display_pin was written to {name} but no status 0 ack"
+                )
+            _LOGGER.info("%s", last_error)
+        if last_error is not None:
+            raise last_error
+        raise BleakError("D7 and D5 are not in the GATT table")
 
     async def _try_display_pin_on_channel(
         self,
