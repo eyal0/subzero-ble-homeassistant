@@ -37,3 +37,20 @@ Use a cloud agent only when the user asks for one, or the work cannot run in thi
 The local branch name and the GitHub PR branch must be the **same string** (the default once the user runs `git push` from this branch).
 
 Do not publish a second remote branch (`cursor/…` or otherwise) for the same change.
+
+## Cursor Cloud specific instructions
+
+Cloud Agent bootstrap runs `.cursor/cloud-agent-install.sh` (Python 3.14 venv + test deps) and `.cursor/cloud-agent-start.sh` (Docker daemon for hassfest). Add `export PATH="${HOME}/.local/bin:${PATH}"` before calling tools from `.venv/bin`.
+
+Canonical checks (same as **Validate** CI):
+
+```bash
+.venv/bin/pytest tests \
+  --cov=custom_components.subzero_ble.config_flow \
+  --cov-report=term-missing \
+  --cov-fail-under=100
+
+sudo docker run --rm -v "$(pwd):/github/workspace" ghcr.io/home-assistant/hassfest
+```
+
+There is no runnable Home Assistant instance in this environment; BLE hardware is not available. Development is unit tests plus hassfest/HACS validation in CI.
