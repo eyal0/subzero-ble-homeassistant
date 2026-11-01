@@ -15,3 +15,11 @@ if [[ ! -d .venv ]]; then
 fi
 
 uv pip install -r requirements_test.txt
+
+if ! command -v docker >/dev/null || ! command -v fuse-overlayfs >/dev/null; then
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    docker.io fuse3 fuse-overlayfs
+fi
