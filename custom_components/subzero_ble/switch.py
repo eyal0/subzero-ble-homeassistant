@@ -5,11 +5,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.core import HomeAssistant
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import SubZeroConfigEntry
-from .const import ACCENT_LIGHT_LEVEL
+from .const import ACCENT_LIGHT_LEVEL, DOMAIN
 from .coordinator import (
     SubZeroData,
     SubZeroDataUpdateCoordinator,
@@ -33,6 +35,16 @@ class SubZeroSwitchEntityDescription(SwitchEntityDescription):
     on_value_fn: Callable[[SubZeroData | None], object] | None = None
 
 
+ACCENT_LIGHT_DESCRIPTION = SubZeroSwitchEntityDescription(
+    key="accent_light",
+    name="Accent Light",
+    icon="mdi:lightbulb-outline",
+    property_key=ACCENT_LIGHT_LEVEL,
+    off_value=0,
+    is_on_fn=accent_light_is_on,
+    on_value_fn=accent_light_on_level,
+)
+
 SWITCH_DESCRIPTIONS: tuple[SubZeroSwitchEntityDescription, ...] = (
     SubZeroSwitchEntityDescription(
         key="air_purifier",
@@ -50,16 +62,17 @@ SWITCH_DESCRIPTIONS: tuple[SubZeroSwitchEntityDescription, ...] = (
         off_value=0,
         is_on_fn=lambda data: field_bool(data, "night_mode"),
     ),
-    SubZeroSwitchEntityDescription(
-        key="accent_light",
-        name="Accent Light",
-        icon="mdi:lightbulb-outline",
-        property_key=ACCENT_LIGHT_LEVEL,
-        off_value=0,
-        is_on_fn=accent_light_is_on,
-        on_value_fn=accent_light_on_level,
-    ),
 )
+
+
+def _async_remove_accent_light(hass: HomeAssistant, address: str) -> None:
+    """Remove an accent light switch left over from an earlier poll."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SWITCH, DOMAIN, f"{address}_accent_light"
+    )
+    if entity_id is not None:
+        registry.async_remove(entity_id)
 
 
 async def async_setup_entry(
@@ -69,10 +82,34 @@ async def async_setup_entry(
 ) -> None:
     """Set up Sub-Zero switches."""
     coordinator = entry.runtime_data
+    address = entry.data["address"]
     async_add_entities(
-        SubZeroSwitchEntity(coordinator, desc, entry.data["address"])
-        for desc in SWITCH_DESCRIPTIONS
+        SubZeroSwitchEntity(coordinator, desc, address) for desc in SWITCH_DESCRIPTIONS
     )
+    added = False
+
+    @callback
+    def _sync_accent_light() -> None:
+        """Add Accent Light while the appliance reports accent_light_level."""
+        nonlocal added
+        reported = coordinator.accent_light_reported
+        if reported is True:
+            if not added:
+                added = True
+                async_add_entities(
+                    [
+                        SubZeroSwitchEntity(
+                            coordinator, ACCENT_LIGHT_DESCRIPTION, address
+                        )
+                    ]
+                )
+            return
+        if reported is False:
+            added = False
+            _async_remove_accent_light(hass, address)
+
+    entry.async_on_unload(coordinator.async_add_listener(_sync_accent_light))
+    _sync_accent_light()
 
 
 class SubZeroSwitchEntity(SubZeroEntity, SwitchEntity):
