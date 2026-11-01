@@ -51,8 +51,12 @@ fi
 
 BRANCH="$(git branch --show-current)"
 if [ -z "$BRANCH" ]; then
-  echo "Not on a branch (detached HEAD). Checkout main first." >&2
-  exit 1
+  if [ "$DRY_RUN" -eq 0 ]; then
+    echo "Not on a branch (detached HEAD). Checkout main first." >&2
+    exit 1
+  fi
+  # Pull-request CI checks out a detached commit. A dry run only prints the tag.
+  BRANCH="HEAD"
 fi
 
 if git remote get-url eyal0 >/dev/null 2>&1; then
