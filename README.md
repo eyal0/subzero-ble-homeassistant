@@ -102,10 +102,13 @@ Not every model reports every field. Missing keys stay `unknown`.
 | Mode | Normal, High Usage, Short Vacation, Long Vacation, or Sabbath. Writable after pairing. |
 | Air Purifier | On/off (`air_filter_on`). Writable after pairing. |
 | Night Mode | On/off (`night_mode` as `1`/`0`). Different from Night Ice. Writable after pairing. |
+| Accent Light | On/off (`accent_light_level`). `0` is off. Turning it on writes the last non-zero level this appliance reported, or `30` if it has not reported one. Unknown until the field appears. Writable after pairing. |
 | Humidity Control | Normal or Enhanced (`humidity_control` as `1`/`2`). Writable after pairing. |
 | Show PIN | Writes `display_pin` on D7 then D5. Retries every 3 seconds until a channel returns status 0 (open a door). |
 
 These temperature entities are **setpoints**, not measured cavity temperatures. The appliance firmware does not expose live fridge/freezer temps over BLE. Values on the wire are Fahrenheit integers. Changing °C/°F on the appliance display is a local preference and does not change the BLE numbers.
+
+Accent Light on-levels are model-specific (`30` on an IW30R, `50` and `130` reported by other models). Turning the light on and off was confirmed on an IW30R with firmware 2.27. Other models that send `accent_light_level` are unverified.
 
 ### Sensors
 

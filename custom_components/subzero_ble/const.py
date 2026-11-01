@@ -152,6 +152,11 @@ HUMIDITY_CONTROL_LABELS: dict[int, str] = {
     value: label for label, value in HUMIDITY_CONTROL_VALUES.items()
 }
 
+# 0 is off. The on-level is model-specific (30 on an IW30R, 50 and 130 seen
+# on others). Until this appliance reports its own on-level, turn-on writes 30.
+ACCENT_LIGHT_LEVEL = "accent_light_level"
+ACCENT_LIGHT_DEFAULT_ON_LEVEL = 30
+
 
 def normalize_pin(pin: str | None) -> str | None:
     """Return a 6-digit PIN or None if the value is empty."""
