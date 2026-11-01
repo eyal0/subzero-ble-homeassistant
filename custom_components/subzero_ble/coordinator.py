@@ -364,6 +364,9 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
         self.client: SubZeroBleClient | None = None
         self._connection_status = CONNECTION_DISCONNECTED
         self._display_pin_task: asyncio.Task[None] | None = None
+        # None until the first poll that carries state. True after any payload
+        # includes accent_light_level. False when a poll with other state omits it.
+        self.accent_light_reported: bool | None = None
 
     @property
     def connection_status(self) -> str:
@@ -521,8 +524,23 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             update.ice_maker_on = params["ice_maker_on"]
         self._apply_push(update)
 
+    def _note_accent_light(self, update: SubZeroData, *, from_poll: bool) -> None:
+        """Record whether this payload reports an accent light.
+
+        A notification that omits the key is a partial update, so it leaves
+        the current answer in place. A poll that includes other state and
+        omits the key means this product has no accent light. An empty poll
+        is not that report.
+        """
+        if ACCENT_LIGHT_LEVEL in update.fields:
+            self.accent_light_reported = True
+            return
+        if from_poll and update.has_values():
+            self.accent_light_reported = False
+
     def _apply_push(self, data: SubZeroData) -> None:
         """Merge an unsolicited notification into coordinator state."""
+        self._note_accent_light(data, from_poll=False)
         current = self.data or SubZeroData()
         merged = current.merge(data)
         _LOGGER.info(
@@ -623,6 +641,9 @@ class SubZeroDataUpdateCoordinator(DataUpdateCoordinator[SubZeroData]):
             raise ConfigEntryAuthFailed(str(err)) from err
 
         self._set_connection_status(self.client.connection_status())
+        # Use the poll payload itself. Merge keeps older keys, so a missing
+        # accent_light_level would still be in the combined state.
+        self._note_accent_light(parsed, from_poll=True)
 
         current = self.data or SubZeroData()
         merged = current.merge(parsed)
