@@ -9,7 +9,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import SubZeroConfigEntry
-from .coordinator import SubZeroData, SubZeroDataUpdateCoordinator, field_bool
+from .const import ACCENT_LIGHT_LEVEL
+from .coordinator import (
+    SubZeroData,
+    SubZeroDataUpdateCoordinator,
+    accent_light_is_on,
+    accent_light_on_level,
+    field_bool,
+)
 from .entity import SubZeroEntity
 
 PARALLEL_UPDATES = 1
@@ -23,6 +30,7 @@ class SubZeroSwitchEntityDescription(SwitchEntityDescription):
     is_on_fn: Callable[[SubZeroData], bool | None]
     on_value: object = True
     off_value: object = False
+    on_value_fn: Callable[[SubZeroData | None], object] | None = None
 
 
 SWITCH_DESCRIPTIONS: tuple[SubZeroSwitchEntityDescription, ...] = (
@@ -41,6 +49,15 @@ SWITCH_DESCRIPTIONS: tuple[SubZeroSwitchEntityDescription, ...] = (
         on_value=1,
         off_value=0,
         is_on_fn=lambda data: field_bool(data, "night_mode"),
+    ),
+    SubZeroSwitchEntityDescription(
+        key="accent_light",
+        name="Accent Light",
+        icon="mdi:lightbulb-outline",
+        property_key=ACCENT_LIGHT_LEVEL,
+        off_value=0,
+        is_on_fn=accent_light_is_on,
+        on_value_fn=accent_light_on_level,
     ),
 )
 
@@ -81,14 +98,17 @@ class SubZeroSwitchEntity(SubZeroEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Turn the appliance feature on."""
-        await self.coordinator.async_set_value(
-            self.entity_description.property_key,
-            self.entity_description.on_value,
-        )
+        await self._async_write(True)
 
     async def async_turn_off(self, **kwargs: object) -> None:
         """Turn the appliance feature off."""
-        await self.coordinator.async_set_value(
-            self.entity_description.property_key,
-            self.entity_description.off_value,
-        )
+        await self._async_write(False)
+
+    async def _async_write(self, turn_on: bool) -> None:
+        """Write this switch's on or off value on D5."""
+        description = self.entity_description
+        if turn_on and description.on_value_fn is not None:
+            value = description.on_value_fn(self.coordinator.data)
+        else:
+            value = description.on_value if turn_on else description.off_value
+        await self.coordinator.async_set_value(description.property_key, value)

@@ -18,6 +18,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .client import SubZeroBleClient, SubZeroInvalidPin
 from .const import (
+    ACCENT_LIGHT_DEFAULT_ON_LEVEL,
+    ACCENT_LIGHT_LEVEL,
     APPLIANCE_HIGH_USAGE,
     APPLIANCE_LONG_VACATION,
     APPLIANCE_MODE_FLAGS,
@@ -67,6 +69,9 @@ class SubZeroData:
     water_filter_life: int | None = None
     air_filter_life: int | None = None
     fields: dict[str, Any] = field(default_factory=dict)
+    # Last accent_light_level above 0. A later 0 must not erase it, because
+    # turning the light back on writes this model-specific level.
+    accent_on_level: int | None = None
 
     def has_values(self) -> bool:
         """Return True if any field was present in the payload."""
@@ -98,12 +103,66 @@ class SubZeroData:
             water_filter_life=_keep(update.water_filter_life, self.water_filter_life),
             air_filter_life=_keep(update.air_filter_life, self.air_filter_life),
             fields=fields,
+            accent_on_level=_remember_accent_on_level(
+                self.accent_on_level, update.fields
+            ),
         )
 
 
 def _keep(new: _T | None, old: _T | None) -> _T | None:
     """Prefer the update value when the payload included it."""
     return new if new is not None else old
+
+
+def _parse_accent_level(value: object) -> int | None:
+    """Return an accent_light_level integer, or None if it is not one."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def accent_light_level(data: SubZeroData) -> int | None:
+    """Return accent_light_level, or None when the payload did not include it."""
+    if ACCENT_LIGHT_LEVEL not in data.fields:
+        return None
+    return _parse_accent_level(data.fields[ACCENT_LIGHT_LEVEL])
+
+
+def accent_light_is_on(data: SubZeroData) -> bool | None:
+    """Return whether the accent light is on.
+
+    Missing or non-numeric values stay unknown. Zero and negative levels are off.
+    """
+    if ACCENT_LIGHT_LEVEL not in data.fields:
+        return None
+    level = accent_light_level(data)
+    if level is None:
+        return None
+    return level > 0
+
+
+def accent_light_on_level(data: SubZeroData | None) -> int:
+    """Return the level to write when turning the accent light on."""
+    remembered = None if data is None else data.accent_on_level
+    if remembered is not None and remembered > 0:
+        return remembered
+    return ACCENT_LIGHT_DEFAULT_ON_LEVEL
+
+
+def _remember_accent_on_level(
+    current: int | None, fields: dict[str, Any]
+) -> int | None:
+    """Keep the last positive accent level. Zero does not clear it."""
+    if ACCENT_LIGHT_LEVEL not in fields:
+        return current
+    level = _parse_accent_level(fields[ACCENT_LIGHT_LEVEL])
+    if level is not None and level > 0:
+        return level
+    return current
 
 
 def field_bool(data: SubZeroData, key: str) -> bool | None:
