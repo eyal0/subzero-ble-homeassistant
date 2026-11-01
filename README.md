@@ -42,15 +42,16 @@ After that, add the integration:
 
 **Settings** → **Devices & services** → **Add integration** → **Sub-Zero Refrigerator (BLE)**. Home Assistant may also prompt you when it sees an `SZG*` advertisement.
 
-HACS uses the GitHub release tag as the installed version. Prefer a tagged release over `main` unless you are testing unreleased changes.
+HACS uses the GitHub release tag as the installed version. Prefer a tagged release over `main` unless you are testing unreleased changes. HACS offers a pre-release only after that repository's **Pre-release** switch is turned on.
 
 The integration version is stored only in `custom_components/subzero_ble/manifest.json` (`const.VERSION` reads it). Create a GitHub release with:
 
 ```bash
-./scripts/release.sh patch    # or minor / major / 0.22.0
+./scripts/release.sh patch         # or minor / major / 0.22.0
+./scripts/release.sh patch --pre   # 0.59.0 becomes 0.59.1b1
 ```
 
-That bumps the manifest, commits, tags `vX.Y.Z`, and pushes to `eyal0`. The tag push creates the GitHub release. Add `--dry-run` to print the git commands without changing anything. **Actions → Release** does the same from the GitHub UI.
+That bumps the manifest, commits, tags `vX.Y.Z`, and pushes to `eyal0`. The tag push creates the GitHub release. A version ending in `bN`, such as `0.59.1b1`, is published as a pre-release so the later stable tag stays free. Add `--dry-run` to print the git commands without changing anything. **Actions → Release** does the same from the GitHub UI. Check **Pre-release** there for a beta. On a beta version, **current** with Pre-release off publishes the stable version (`0.59.1b2` becomes `0.59.1`), and **current** with Pre-release on bumps the beta (`0.59.1b1` becomes `0.59.1b2`).
 
 ### Manual
 

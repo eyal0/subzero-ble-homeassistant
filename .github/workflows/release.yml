@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: Version part to increment (or keep the current manifest version)
+        description: Version to release. current keeps a stable manifest, or drops a bN suffix to publish that beta as stable.
         required: true
         type: choice
         options:
@@ -16,6 +16,11 @@ on:
           - major
           - current
         default: patch
+      prerelease:
+        description: Publish a GitHub pre-release. patch, minor, or major starts at b1 (0.59.0 patch becomes 0.59.1b1). current on a beta bumps bN.
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: release
@@ -38,6 +43,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BUMP: ${{ inputs.bump }}
+          PRE: ${{ inputs.prerelease }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -46,15 +52,19 @@ jobs:
           }
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$BUMP" != "current" ]; then
-              VERSION=$(python3 scripts/bump_version.py "$BUMP")
+            PRE_ARGS=()
+            if [ "${PRE:-false}" = "true" ]; then
+              PRE_ARGS=(--pre)
+            fi
+            OLD="$(manifest_version)"
+            VERSION="$(python3 scripts/bump_version.py "$BUMP" --print "${PRE_ARGS[@]}")"
+            if [ "$VERSION" != "$OLD" ]; then
+              python3 scripts/bump_version.py "$BUMP" "${PRE_ARGS[@]}"
               git add custom_components/subzero_ble/manifest.json
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git commit -m "Bump version to ${VERSION}"
               git push origin "HEAD:${REF_NAME}"
-            else
-              VERSION=$(manifest_version)
             fi
             TAG="v${VERSION}"
             if ! git rev-parse "$TAG" >/dev/null 2>&1; then
@@ -64,7 +74,7 @@ jobs:
           else
             TAG="$REF_NAME"
             VERSION="${TAG#v}"
-            MANIFEST=$(manifest_version)
+            MANIFEST="$(manifest_version)"
             if [ "$VERSION" != "$MANIFEST" ]; then
               echo "Tag $TAG does not match manifest.json version $MANIFEST"
               exit 1
@@ -78,10 +88,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.prepare.outputs.tag }}
+          VERSION: ${{ steps.prepare.outputs.version }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "GitHub release $TAG already exists"
             exit 0
           fi
-          gh release create "$TAG" --generate-notes --title "$TAG" --verify-tag
+          # The tag push starts this workflow again, and that run does not see
+          # the form checkbox. The bN suffix is the signal both runs share.
+          if python3 scripts/bump_version.py --check-prerelease "$VERSION"; then
+            gh release create "$TAG" --generate-notes --title "$TAG" --verify-tag --prerelease
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG" --verify-tag
+          fi
