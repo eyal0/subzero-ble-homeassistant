@@ -83,9 +83,15 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _manifest_version() -> str:
+    """Return the version currently stored in manifest.json."""
+    return json.loads(MANIFEST.read_text(encoding="utf-8"))["version"]
+
+
 def test_release_script_dry_run_selects_a_beta_tag() -> None:
     """patch --pre plans vX.Y.ZbN and leaves the manifest untouched."""
     before = MANIFEST.read_text(encoding="utf-8")
+    expected = bump_version._bump(_manifest_version(), "patch", pre=True)
     result = subprocess.run(
         ["./scripts/release.sh", "patch", "--pre", "--dry-run"],
         cwd=ROOT,
@@ -95,23 +101,23 @@ def test_release_script_dry_run_selects_a_beta_tag() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "v0.59.1b1" in result.stdout
-    assert "git tag v0.59.1b1" in result.stdout
+    assert f"v{expected}" in result.stdout
+    assert f"git tag v{expected}" in result.stdout
     assert MANIFEST.read_text(encoding="utf-8") == before
 
 
 def test_print_and_check_do_not_write_the_manifest() -> None:
     """The flags the workflow uses print or exit without editing manifest.json."""
     before = MANIFEST.read_text(encoding="utf-8")
+    expected = bump_version._bump(_manifest_version(), "patch", pre=True)
     printed = _run("patch", "--pre", "--print")
-    checked = _run("--check-prerelease", "0.59.1b1")
+    checked = _run("--check-prerelease", expected)
     stable = _run("--check-prerelease", "0.59.1")
     rejected = _run("current", "--pre", "--print")
 
     assert printed.returncode == 0
-    assert printed.stdout.strip() == "0.59.1b1"
+    assert printed.stdout.strip() == expected
     assert checked.returncode == 0
     assert stable.returncode == 1
     assert rejected.returncode != 0
     assert MANIFEST.read_text(encoding="utf-8") == before
-    assert json.loads(before)["version"] == "0.59.0"
